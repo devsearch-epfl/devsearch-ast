@@ -2,7 +2,7 @@ package devsearch.ast
 
 /**
  * Copied over from https://github.com/scala/scala/blob/v2.10.4/src/library/scala/util/parsing/input/Positional.scala
- * We redifine this here to make sure the positions we use are our positions
+ * We redefine this here to make sure the positions we use are our positions
  */
 trait Positional {
   private var _pos: Position = NoPosition

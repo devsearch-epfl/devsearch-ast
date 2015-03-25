@@ -2,7 +2,7 @@ package devsearch.ast
 
 sealed trait AST extends Positional with Commentable with java.io.Serializable {
   def copyFrom(ast: AST): this.type = {
-    ast.comment.foreach(appendComment(_))
+    ast.comment.foreach(appendComment)
     setPos(ast.pos)
   }
 }
@@ -116,7 +116,7 @@ case class Assert(condition: Expr, message: Expr) extends Statement
  * A flexible block structure
  *
  * We model code blocks as a list of `AST`s. We accept arbitrary `AST`s to enable
- * arbitray statements, definitions and also side-effecting expressions inside the block.
+ * arbitrary statements, definitions and also side-effecting expressions inside the block.
  */
 case class Block(statements: List[AST]) extends Statement
 
@@ -317,7 +317,7 @@ case class ArrayAccess(array: Expr, index: Expr) extends Expr
 /**
  * Array literal
  *
- * Array creation in general. We try to stay flexible to accomodate typed arrays with dimensions and arrays that immediately fill out their
+ * Array creation in general. We try to stay flexible to accommodate typed arrays with dimensions and arrays that immediately fill out their
  * elements. For example:
  * - `new int[10]`
  * - `[1,2,3,4`]
@@ -359,7 +359,7 @@ case class InstanceOf(expr: Expr, tpe: Type) extends Expr
 /**
  * Simple literal
  *
- * Literals that are part of the language definition. Each litteral is bound to a primitive type and
+ * Literals that are part of the language definition. Each literal is bound to a primitive type and
  * we store the value in a string format to stay flexible.
  */
 case class SimpleLiteral(tpe: PrimitiveType, value: String) extends Expr
@@ -367,7 +367,7 @@ case class SimpleLiteral(tpe: PrimitiveType, value: String) extends Expr
 /** Null literal, `null` in java */
 case object NullLiteral extends Expr with Unassignable
 
-/** Void litteral, like `Unit` in scala */
+/** Void literal, like `Unit` in scala */
 case object VoidLiteral extends Expr with Unassignable
 
 /** This expression, can be specialized with a type */
