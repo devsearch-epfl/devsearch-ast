@@ -96,7 +96,7 @@ object JavaParser extends Parser {
 
     private def inNode[A <: AST](node: Node)(ast: => A): A = {
       val positioned = ast.setPos(extractPosition(node))
-      extractComment(node).foreach(positioned.setComment(_))
+      extractComment(node).foreach(positioned.setComment)
       positioned
     }
 
@@ -190,7 +190,7 @@ object JavaParser extends Parser {
       ConstructorDef(extractModifiers(decl.getModifiers), extractName(decl.getNameExpr),
         translateList[Annotation](decl.getAnnotations), translateList[TypeDef](decl.getTypeParameters),
         translateList[ValDef](decl.getParameters),
-        Option(decl.getThrows).toList.flatten.map(extractName(_)),
+        Option(decl.getThrows).toList.flatten.map(extractName),
         translate[Block](decl.getBlock))
     })
 
@@ -198,7 +198,7 @@ object JavaParser extends Parser {
       FunctionDef(extractModifiers(decl.getModifiers), extractName(decl.getNameExpr),
         translateList[Annotation](decl.getAnnotations), translateList[TypeDef](decl.getTypeParameters),
         translateList[ValDef](decl.getParameters), translate[Typ](decl.getType),
-        Option(decl.getThrows).toList.flatten.map(extractName(_)),
+        Option(decl.getThrows).toList.flatten.map(extractName),
         translate[Block](decl.getBody))
     })
 

@@ -14,7 +14,7 @@ trait Source {
     def indexes(o: Int, lineSizes: List[Int]): List[Int] = {
       val idx = contents.indexOf(o, '\n')
       if (idx >= 0) indexes(o + 1, (idx - o) :: lineSizes)
-      else (contents.size - o) :: lineSizes
+      else (contents.length - o) :: lineSizes
     }
     indexes(0, Nil).reverse
   }
