@@ -8,3 +8,4 @@ libraryDependencies += "com.github.javaparser" % "javaparser-core" % "2.0.0"
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.1.7" % "test"
 
+libraryDependencies += "com.github.nikita-volkov" % "sext" % "0.2.3"
