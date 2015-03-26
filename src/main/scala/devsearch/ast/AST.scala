@@ -1,24 +1,43 @@
 package devsearch.ast
 
+/** A generic Abstract Syntax Tree format */
 sealed trait AST extends Positional with Commentable with java.io.Serializable {
-  def copyFrom(ast: AST): this.type = {
+  def fromAST(ast: AST): this.type = {
     ast.comment.foreach(appendComment)
     setPos(ast.pos)
   }
+
+  /** Tree foldRight operator, @see [[Operators.foldRight]] */
+  def foldRight[T](f: (AST, Seq[T]) => T): T = Operators.foldRight(f)(this)
+
+  /** Checks for match over this AST and all children, @see [[Operators.exists]] */
+  def exists(matcher: AST => Boolean): Boolean = Operators.exists(matcher)(this)
+
+  /** Collects all matches over complete AST, @see [[Operators.collect]] */
+  def collect[T](matcher: AST => Set[T]): Set[T] = Operators.collect(matcher)(this)
+
+  /** Post-transform on AST, @see [[Operators.postMap]] */
+  def postMap(f: AST => Option[AST], applyRec: Boolean = false): AST = Operators.postMap(f, applyRec)(this)
 }
 
 /**
  * Special trait for objects to guarantee we don't associate positions or comments with
  * case objects that are reused in multiple places in the AST
  */
-trait Unassignable extends AST {
+sealed trait Unassignable extends AST {
   override def setPos(pos: Position) = this
   override def setComment(comment: String) = this
 }
 
 // -- Definitions ---------------------------------------------------------------------
 
-trait Definition extends AST {
+/**
+ * Definition super type
+ *
+ * We extend [[Statement]] here since in many languages, definitions (such as [[ValDef]], for example) can take
+ * place in statement positions.
+ */
+sealed trait Definition extends Statement {
   val name: String
   val annotations: List[Annotation]
 }
@@ -34,11 +53,17 @@ case class PackageDef(name: String, annotations: List[Annotation], imports: List
  * Type definition
  *
  * A type definition. This encompasses formal type parameters, C-style typeDefs and type members like in Scala.
+ * By convention, if this is a type alias (like `type A = Int`), we store the aliased type as the first super bound.
  * Examples:
  * - `type A`
  * - `def test[A]` where `A` is a type parameter of `test`
  */
 case class TypeDef(name: String, annotations: List[Annotation], lowerBounds: List[Type], superBounds: List[Type]) extends Definition
+
+sealed trait StructuralSort extends java.io.Serializable
+case object ClassSort extends StructuralSort
+case object TraitSort extends StructuralSort
+case object StructSort extends StructuralSort
 
 /**
  * Class definition
@@ -47,7 +72,7 @@ case class TypeDef(name: String, annotations: List[Annotation], lowerBounds: Lis
  */
 case class ClassDef(modifiers: Modifiers, name: String, annotations: List[Annotation],
   tparams: List[TypeDef], superClasses: List[ClassType],
-  definitions: List[Definition], isTrait: Boolean = false) extends Definition
+  definitions: List[Definition], sort: StructuralSort = ClassSort) extends Definition
 
 /**
  * Enum definition
@@ -75,7 +100,7 @@ case class AnnotationDef(modifiers: Modifiers, name: String, annotations: List[A
  *
  * The definition of a class (or other type) constructor. Very close to a [[FunctionDef]], except there is no return type.
  */
-case class ConstructorDef(modifiers: Modifiers, name: String, annotations: List[Annotation], tparams: List[TypeDef], params: List[ValDef], throws: List[String], body: Block) extends Definition
+case class ConstructorDef(modifiers: Modifiers, name: String, annotations: List[Annotation], tparams: List[TypeDef], params: List[ValDef], body: Block, isDestructor: Boolean = false) extends Definition
 
 /**
  * Function definition
@@ -83,7 +108,7 @@ case class ConstructorDef(modifiers: Modifiers, name: String, annotations: List[
  * Any kind of named function definitions, like methods or block-local functions. Opposed to [[FunctionLiteral]] since we require a name and get some
  * extra structure too. For example, `def test[A,B,C](x: (A,B)): C = { ... }`.
  */
-case class FunctionDef(modifiers: Modifiers, name: String, annotations: List[Annotation], tparams: List[TypeDef], params: List[ValDef], tpe: Type, throws: List[String], body: Block) extends Definition
+case class FunctionDef(modifiers: Modifiers, name: String, annotations: List[Annotation], tparams: List[TypeDef], params: List[ValDef], tpe: Type, body: Block) extends Definition
 
 /**
  * Value definition
@@ -96,9 +121,18 @@ case class FunctionDef(modifiers: Modifiers, name: String, annotations: List[Ann
  */
 case class ValDef(modifiers: Modifiers, name: String, annotations: List[Annotation], tpe: Type, rhs: Expr, varArgs: Boolean = false) extends Definition
 
+/**
+ * Initializer statement
+ *
+ * A subtle definition mostly useful to catch corner cases. An example, in java, is the `static { ... }` block that can be found in singleton classes. We type this as a definition since it is clearly a statement otherwise.
+ */
+case class Initializer(isStatic: Boolean, annotations: List[Annotation], body: Block) extends Definition {
+  val name = Names.default
+}
+
 // -- Statements ----------------------------------------------------------------------
 
-trait Statement extends AST
+sealed trait Statement extends AST
 
 /** Import statement */
 case class Import(name: String, asterisk: Boolean, static: Boolean) extends Statement
@@ -115,10 +149,10 @@ case class Assert(condition: Expr, message: Expr) extends Statement
 /**
  * A flexible block structure
  *
- * We model code blocks as a list of `AST`s. We accept arbitrary `AST`s to enable
- * arbitrary statements, definitions and also side-effecting expressions inside the block.
+ * We model code blocks as a list of [[Statement]]. Since expressions and definitions are also satetements
+ * in our language, this is general enough for any block definition.
  */
-case class Block(statements: List[AST]) extends Statement
+case class Block(statements: List[Statement]) extends Statement
 
 /** Return statement */
 case class Return(value: Expr) extends Statement
@@ -160,7 +194,7 @@ case class Do(condition: Expr, body: Statement) extends Statement
  * construct that provides guarded iteration. Since certain languages provide both constructs, we provide support
  * for both as well.
  */
-case class Foreach(vals: List[ValDef], condition: Expr, body: Statement) extends Statement
+case class Foreach(vals: List[ValDef], iterable: Expr, body: Statement) extends Statement
 
 /**
  * For loop
@@ -184,23 +218,16 @@ case class Synchronize(lock: Expr, body: Statement) extends Statement
 /** A basic try-catch-finally block */
 case class Try(tryBlock: Block, catchs: List[(ValDef, Block)], finallyBlock: Block) extends Statement
 
-/**
- * Initializer statement
- *
- * A subtle definition mostly useful to catch corner cases. An example, in java, is the `static { ... }` block that can be found in singleton classes.
- */
-case class Initializer(isStatic: Boolean, annotations: List[Annotation], body: Block) extends Statement
-
 // -- Types ---------------------------------------------------------------------------
 
-trait Type extends AST
+sealed trait Type extends AST
 
 /**
  * Class type
  *
  * A bin for all non-primitive named types. Since we're only running above parsers here, most type parameters will fall into this bin as well.
  */
-case class ClassType(name: String, scope: Type, annotations: List[Annotation], tparams: List[Type]) extends Type
+case class ClassType(scope: Expr, name: String, annotations: List[Annotation], tparams: List[Type]) extends Type
 
 /**
  * Primitive type
@@ -208,7 +235,7 @@ case class ClassType(name: String, scope: Type, annotations: List[Annotation], t
  * Primitive low-level types. We provide an extensive list of such type instances (see [[PrimitiveTypes]]), but
  * also provide a `Specialized(str: String)` primitive type for types that aren't included in the list.
  */
-trait PrimitiveType extends Type with Unassignable
+sealed trait PrimitiveType extends Type with Unassignable
 
 /** Enumeration of primitive types */
 object PrimitiveTypes {
@@ -259,6 +286,17 @@ case object AnyType extends Type with Unassignable
  */
 case object BottomType extends Type with Unassignable
 
+/**
+ * Type hint or unparsed type
+ *
+ * Some parsers don't parse type trees and some languages actually support type hints, so these
+ * cases are all lumped into this `TypeHint` type.
+ *
+ * The `hint: String` field contains a string representation of this type and can be tokenized (or other)
+ * to infer stuff about this type if useful.
+ */
+case class TypeHint(hint: String) extends Type
+
 // -- Expressions ---------------------------------------------------------------------
 
 /**
@@ -267,7 +305,7 @@ case object BottomType extends Type with Unassignable
  * We extend the [[Statement]] type here as in many languages, most expressions can be found in statement positions.
  * Since semantics are not really our focus here, this is the simplest way to ensure correct parsing for these.
  */
-trait Expr extends Statement
+sealed trait Expr extends Statement
 
 /** Identifier as in reference to local variable */
 case class Ident(name: String) extends Expr
@@ -306,7 +344,7 @@ case class TernaryOp(cond: Expr, thenn: Expr, elze: Expr) extends Expr
  *
  * Represents any sort of function or method call.
  */
-case class FunctionCall(receiver: Expr, name: String, tparams: List[Type], args: List[Expr]) extends Expr
+case class FunctionCall(receiver: Expr, tparams: List[Type], args: List[Expr]) extends Expr
 
 /** Constructor call (or object creation) */
 case class ConstructorCall(receiver: Expr, tpe: ClassType, tparams: List[Type], args: List[Expr], body: List[Definition]) extends Expr
@@ -323,6 +361,13 @@ case class ArrayAccess(array: Expr, index: Expr) extends Expr
  * - `[1,2,3,4`]
  */
 case class ArrayLiteral(tpe: Type, annotations: List[Annotation], dimensions: List[Expr], elements: List[Expr]) extends Expr
+
+/**
+ * Pair or sequence literal
+ *
+ * Used for multiple returns, language supported pairs, sequences, basically anything enclosed between parentheses and with commas ;)
+ */
+case class MultiLiteral(elements: List[Expr]) extends Expr
 
 /**
  * Assignment expression
@@ -389,7 +434,17 @@ case class Annotation(name: String, params: Map[String, Expr] = Map.empty) exten
  *
  * A function object, like a lambda. These functions are considered nameless (at least for now).
  */
-case class FunctionLiteral(params: List[ValDef], body: Statement) extends Expr
+case class FunctionLiteral(params: List[ValDef], tpe: Type, body: Statement) extends Expr
+
+/**
+ * Wildcard expression
+ *
+ * This expression is used to encode a language feature that is expressed in a wildcard position.
+ * For example, we have:
+ * - `default` switch statement in Java
+ * - `_` in Scala
+ */
+case object Wildcard extends Expr with Unassignable
 
 // -- Helpers -------------------------------------------------------------------------
 
@@ -437,6 +492,7 @@ sealed class Modifiers(private val mask: Int) extends java.io.Serializable {
   }
 }
 
+/** Exhaustive list of supported [[Modifiers]] */
 object Modifiers {
   object NoModifiers extends Modifiers(0)
 
@@ -456,6 +512,9 @@ object Modifiers {
 object Names {
   val default = "$$default"
   val noop = "$$noop"
+
+  val OVERRIDE_ANNOTATION = "Override"
+  val THROWS_ANNOTATION = "throws"
 }
 
 object Empty {

@@ -39,3 +39,11 @@ case class SimplePosition(source: Source, line: Int, col: Int) extends Position
 case class RangePosition(source: Source, start: (Int, Int), end: (Int, Int)) extends Position {
   val (line, col) = start
 }
+
+trait LinePosition extends Position {
+  val col = 0
+}
+
+case class SimpleLinePosition(source: Source, line: Int) extends LinePosition
+
+case class LineRangePosition(source: Source, line: Int, end: Int) extends LinePosition

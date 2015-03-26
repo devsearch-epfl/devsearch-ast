@@ -1,5 +1,7 @@
 package devsearch.ast
 
+case class SourceCreationError(cause: Throwable) extends Exception("Couldn't create source: " + cause.getMessage, cause)
+
 /**
  * Source
  *
@@ -44,10 +46,35 @@ case object NoSource extends Source {
 }
 
 class FileSource(val path: String) extends Source {
-  val contents = scala.io.Source.fromFile(path).toArray
+  val contents = try {
+    scala.io.Source.fromFile(path).toArray
+  } catch {
+    case io: java.io.IOException => throw SourceCreationError(io)
+  }
 }
 
-class ContentsSource(str: String) extends Source {
-  val path = "$$memorySource"
-  val contents = str.toArray
+object ContentsSource {
+  private val random = new java.util.Random
+  private val tmpDir = System.getProperty("java.io.tmpdir") + "/"
+  private def fileName(path: String) = tmpDir + "devsearch-input-" + random.nextInt(Integer.MAX_VALUE) + "/" + path
+}
+
+class ContentsSource(_path: String, _contents: String) extends Source {
+  lazy val path = {
+    var output : java.io.BufferedWriter = null
+    try {
+      val fileName = ContentsSource.fileName(_path)
+      val file = new java.io.File(fileName)
+      file.getParentFile.mkdirs()
+      output = new java.io.BufferedWriter(new java.io.FileWriter(file))
+      output.write(_contents)
+      fileName
+    } catch {
+      case io: java.io.IOException => throw SourceCreationError(io)
+    } finally {
+      if (output != null) output.close
+    }
+  }
+
+  val contents = _contents.toArray
 }

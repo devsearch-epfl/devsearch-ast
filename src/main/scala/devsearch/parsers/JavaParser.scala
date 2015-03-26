@@ -137,10 +137,15 @@ object JavaParser extends Parser {
 
     def visit(decl: ClassOrInterfaceDeclaration, a: Null) = List(inNode(decl) {
       val (name, modifiers, annotations, members) = extractTypeDeclaration(decl)
+      val abstractedMembers = members.map {
+        case fd: FunctionDef if decl.isInterface => fd.copy(modifiers = fd.modifiers | Modifiers.ABSTRACT).fromAST(fd)
+        case vd: ValDef if decl.isInterface => vd.copy(modifiers = vd.modifiers | Modifiers.STATIC | Modifiers.FINAL).fromAST(vd)
+        case m => m
+      }
       ClassDef(modifiers, name, annotations,
         translateList[TypeDef](decl.getTypeParameters),
         translateList[ClassType](decl.getExtends) ++ translateList[ClassType](decl.getImplements),
-        members, decl.isInterface)
+        abstractedMembers, if (decl.isInterface) TraitSort else ClassSort)
     })
 
     def visit(decl: EnumDeclaration, a: Null) = List(inNode(decl) {
@@ -187,18 +192,23 @@ object JavaParser extends Parser {
     }
 
     def visit(decl: ConstructorDeclaration, a: Null) = List(inNode(decl) {
+      val throwsAnnots = Option(decl.getThrows).toList.flatten.map(extractName).map { name =>
+        Annotation(Names.THROWS_ANNOTATION, Map(Names.default -> inNode(decl)(Ident(name))))
+      }
       ConstructorDef(extractModifiers(decl.getModifiers), extractName(decl.getNameExpr),
-        translateList[Annotation](decl.getAnnotations), translateList[TypeDef](decl.getTypeParameters),
+        translateList[Annotation](decl.getAnnotations) ++ throwsAnnots,
+        translateList[TypeDef](decl.getTypeParameters),
         translateList[ValDef](decl.getParameters),
-        Option(decl.getThrows).toList.flatten.map(extractName),
         translate[Block](decl.getBlock))
     })
 
     def visit(decl: MethodDeclaration, a: Null) = List(inNode(decl) {
+      val throwsAnnots = Option(decl.getThrows).toList.flatten.map(extractName).map { name =>
+        Annotation(Names.THROWS_ANNOTATION, Map(Names.default -> inNode(decl)(Ident(name))))
+      }
       FunctionDef(extractModifiers(decl.getModifiers), extractName(decl.getNameExpr),
-        translateList[Annotation](decl.getAnnotations), translateList[TypeDef](decl.getTypeParameters),
+        translateList[Annotation](decl.getAnnotations) ++ throwsAnnots, translateList[TypeDef](decl.getTypeParameters),
         translateList[ValDef](decl.getParameters), translate[Typ](decl.getType),
-        Option(decl.getThrows).toList.flatten.map(extractName),
         translate[Block](decl.getBody))
     })
 
@@ -222,9 +232,20 @@ object JavaParser extends Parser {
 
     def visit(tpe: ClassOrInterfaceType, a: Null) = List(inNode(tpe) {
       val name = extractName(tpe.getName)
-      if (name == "String") PrimitiveTypes.String
-      else ClassType(extractName(tpe.getName), translate[Typ](tpe.getScope),
-        translateList[Annotation](tpe.getAnnotations), translateList[Typ](tpe.getTypeArgs))
+      if (name == "String") PrimitiveTypes.String else {
+        def translateScope(cot: ClassOrInterfaceType): (Expr, List[Annotation]) = Option(cot) match {
+          case Some(tpe) =>
+            val (scope, annotations) = translateScope(tpe.getScope)
+            val newAnnotations = translateList[Annotation](tpe.getAnnotations)
+            val newScope = FieldAccess(scope, extractName(tpe.getName), translateList[Typ](tpe.getTypeArgs))
+            newScope -> (annotations ++ newAnnotations)
+          case _ => Empty[Expr] -> Nil
+        }
+
+        val (scope, annotations) = translateScope(tpe.getScope)
+        ClassType(scope, extractName(tpe.getName),
+          annotations ++ translateList[Annotation](tpe.getAnnotations), translateList[Typ](tpe.getTypeArgs))
+      }
     })
 
     def visit(tpe: PrimitiveType, a: Null) = List {
@@ -344,8 +365,10 @@ object JavaParser extends Parser {
     def visit(expr: NullLiteralExpr, a: Null)            = List(NullLiteral)
     
     def visit(expr: MethodCallExpr, a: Null) = List(inNode(expr) {
-      FunctionCall(translate[Expr](expr.getScope), extractName(expr.getNameExpr),
-        translateList[Typ](expr.getTypeArgs), translateList[Expr](expr.getArgs))
+      val name = extractName(expr.getNameExpr)
+      val receiver = translate[Expr](expr.getScope)
+      val caller = if (receiver == Empty[Expr]) Ident(name) else FieldAccess(receiver, name, Nil)
+      FunctionCall(caller, translateList[Typ](expr.getTypeArgs), translateList[Expr](expr.getArgs))
     })
 
     def visit(expr: NameExpr, a: Null) = List(inNode(expr)(Ident(extractName(expr))))
@@ -356,16 +379,15 @@ object JavaParser extends Parser {
         translateList[Definition](expr.getAnonymousClassBody))
     })
 
-    private def translatePath(expr: Expr): Typ = expr match {
-      case FieldAccess(receiver, name, tparams) => ClassType(name, translatePath(receiver), Nil, tparams).copyFrom(expr)
-      case MethodAccess(receiver, name, tparams) => ClassType(name, receiver, Nil, tparams).copyFrom(expr)
-      case Ident(name) => ClassType(name, Empty[Typ], Nil, Nil).copyFrom(expr)
+    private def translateToClass(expr: Expr): Typ = expr match {
+      case FieldAccess(receiver, name, tparams) => ClassType(receiver, name, Nil, tparams).fromAST(expr)
+      case Ident(name) => ClassType(Empty[Expr], name, Nil, Nil).fromAST(expr)
       case _ => Empty[Typ]
     }
 
-    def visit(expr: ThisExpr, a: Null) = List(inNode(expr)(This(translatePath(translate[Expr](expr.getClassExpr)))))
+    def visit(expr: ThisExpr, a: Null) = List(inNode(expr)(This(translateToClass(translate[Expr](expr.getClassExpr)))))
 
-    def visit(expr: SuperExpr, a: Null) = List(inNode(expr)(Super(translatePath(translate[Expr](expr.getClassExpr)))))
+    def visit(expr: SuperExpr, a: Null) = List(inNode(expr)(Super(translateToClass(translate[Expr](expr.getClassExpr)))))
 
     def visit(expr: UnaryExpr, a: Null) = List(inNode(expr) {
       val (op, fix) = Option(expr.getOperator) match {
@@ -406,7 +428,7 @@ object JavaParser extends Parser {
     })
 
     def visit(expr: LambdaExpr, a: Null) = List(inNode(expr) {
-      FunctionLiteral(translateList[ValDef](expr.getParameters), translate[Stmt](expr.getBody))
+      FunctionLiteral(translateList[ValDef](expr.getParameters), Empty[Typ], translate[Stmt](expr.getBody))
     })
 
     def visit(expr: MethodReferenceExpr, a: Null) = List(inNode(expr) {
@@ -423,7 +445,7 @@ object JavaParser extends Parser {
     //- Statements ----------------------------------------
 
     def visit(stmt: ExplicitConstructorInvocationStmt, a: Null) = List(inNode(stmt) {
-      val path = translatePath(translate[Expr](stmt.getExpr))
+      val path = translateToClass(translate[Expr](stmt.getExpr))
       val tparams = translateList[Typ](stmt.getTypeArgs)
       val args = translateList[Expr](stmt.getArgs)
       if (stmt.isThis) ThisCall(path, tparams, args)
@@ -437,7 +459,7 @@ object JavaParser extends Parser {
     })
 
     def visit(stmt: BlockStmt, a: Null) = List(inNode(stmt) {
-      Block(translateList[AST](stmt.getStmts))
+      Block(translateList[Stmt](stmt.getStmts))
     })
 
     def visit(stmt: LabeledStmt, a: Null) = List(inNode(stmt) {
@@ -450,7 +472,7 @@ object JavaParser extends Parser {
 
     def visit(stmt: SwitchStmt, a: Null) = List(inNode(stmt) {
       Switch(translate[Expr](stmt.getSelector), mapSafe(stmt.getEntries) { entry =>
-        val block = translateList[AST](entry.getStmts) match {
+        val block = translateList[Stmt](entry.getStmts) match {
           case list @ (x :: xs) => Block(list).setPos(x.pos)
           case _ => Empty[Block]
         }
