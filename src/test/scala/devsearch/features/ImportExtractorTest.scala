@@ -12,13 +12,15 @@ class ImportExtractorTest extends FlatSpec with Matchers {
         val fileURL = getClass.getResource("/samples/JavaConcepts.java")
         val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
         val ast = JavaParser.parse(filePath)
+
+        /// TODO (pwalch): make order independent
         assert(ImportExtractor.extractFeatures(ast) == JsonParser( """[
-            {"type": "import", "domain": "com.github.javaparser.JavaParser", "containsAsterisk": "false", "isStatic": "false"},
-            {"type": "import", "domain": "japa.parser.ParseException", "containsAsterisk": "false", "isStatic": "false"},
-            {"type": "import", "domain": "com.github.javaparser.ast.CompilationUnit", "containsAsterisk": "false", "isStatic": "false"},
-            {"type": "import", "domain": "org.junit.Ignore", "containsAsterisk": "false", "isStatic": "false"},
-            {"type": "import", "domain": "java.io.*", "containsAsterisk": "true", "isStatic": "false"},
-            {"type": "import", "domain": "java.util.*", "containsAsterisk": "true", "isStatic": "false"}
+            {"type":"import","domain":"java.util","containsAsterisk":"true","isStatic":"false"},
+            {"type":"import","domain":"com.github.javaparser.ast.CompilationUnit","containsAsterisk":"false","isStatic":"false"},
+            {"type":"import","domain":"java.io","containsAsterisk":"true","isStatic":"false"},
+            {"type":"import","domain":"japa.parser.ParseException","containsAsterisk":"false","isStatic":"false"},
+            {"type":"import","domain":"org.junit.Ignore","containsAsterisk":"false","isStatic":"false"},
+            {"type":"import","domain":"com.github.javaparser.JavaParser", "containsAsterisk":"false","isStatic":"false"}
         ]"""))
     }
 }
