@@ -11,9 +11,11 @@ resolvers ++= Seq(
 
 libraryDependencies ++= Seq(
   "com.github.javaparser" % "javaparser-core" % "2.0.0",
-  "io.spray" %%  "spray-json" % "1.3.1",
   "com.chuusai" % "shapeless_2.10.4" % "2.0.0",
   "org.scalatest" %% "scalatest" % "2.1.7" % "test"
 )
 
-libraryDependencies += "com.github.nikita-volkov" % "sext" % "0.2.3"
+libraryDependencies ++= Seq(
+  "com.github.nikita-volkov" % "sext" % "0.2.3",
+  "org.apache.spark" %% "spark-core" % "1.3.0"
+)

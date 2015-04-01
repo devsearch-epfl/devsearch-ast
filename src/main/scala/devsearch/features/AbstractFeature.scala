@@ -1,8 +1,10 @@
 package devsearch.features
 
-/**
- * Created by julien on 01.04.15.
- */
-object AbstractFeature {
+import org.apache.spark.SparkContext
+import org.apache.spark.rdd.RDD
 
+abstract class AbstractFeature(codeFileLocation: CodeFileLocation)
+
+trait AbstractFeatureExtractor {
+    def extract(sparkContext: SparkContext, codeFileData: RDD[CodeFileData]): RDD[AbstractFeature]
 }
