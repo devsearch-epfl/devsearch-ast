@@ -16,7 +16,7 @@ object CodeEater {
             VariableDeclarationExtractor
         ).foldLeft(emptyRDD)(
             (acc, extractor) =>
-                sc.union(acc, extractor.extract(inputData))
+                sc.union(acc, extractor.extract(inputData)).distinct
         )
     }
 }
