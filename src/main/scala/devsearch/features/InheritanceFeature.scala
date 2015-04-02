@@ -13,8 +13,8 @@ object InheritanceExtractor extends AbstractFeatureExtractor {
         codeFileData.flatMap { codeFile =>
             Operators.collect[InheritanceFeature] {
                 case ClassDef(modifiers, name, annotations, tparams, superClasses, definitions, sort) =>
-                    superClasses.asInstanceOf[List[String]].map(superClassName =>
-                        InheritanceFeature(codeFile.codeFileLocation, name, superClassName)
+                    superClasses.map(superClass =>
+                        InheritanceFeature(codeFile.codeFileLocation, name, superClass.name)
                     ).toSet
 
                 case _ => Set()
