@@ -11,13 +11,13 @@ case class ImportFeature(codeLocation: CodeFileLocation,
 
 object ImportExtractor extends AbstractFeatureExtractor {
     def extract(codeFileData: RDD[CodeFileData]): RDD[AbstractFeature] = {
-        codeFileData.flatMap(codeFile =>
+        codeFileData.flatMap { codeFile =>
             Operators.collect[ImportFeature] {
                 case Import(name, asterisk, static) =>
                     Set(ImportFeature(codeFile.codeFileLocation, name, asterisk, static))
 
                 case _ => Set()
-            } (codeFile.syntaxTree)
-        )
+            }(codeFile.syntaxTree)
+        }
     }
 }

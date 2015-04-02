@@ -2,7 +2,7 @@ package devsearch.features
 
 import org.apache.spark.rdd.RDD
 
-abstract class AbstractFeature(codeFileLocation: CodeFileLocation)
+abstract class AbstractFeature(codeFileLocation: CodeFileLocation) extends Serializable
 
 trait AbstractFeatureExtractor {
     def extract(codeFileData: RDD[CodeFileData]): RDD[AbstractFeature]
