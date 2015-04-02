@@ -7,7 +7,9 @@ case class InheritanceFeature(codeLocation: CodeFileLocation,
                               inFilePosition: InFilePosition,
                               className: String,
                               superClassName: String)
-    extends AbstractFeature(codeLocation, inFilePosition)
+    extends AbstractFeature(codeLocation, inFilePosition) {
+    override def getKey(): String = "inheritance = " + className
+}
 
 object InheritanceExtractor extends AbstractFeatureExtractor {
     override def extract(codeFileData: RDD[CodeFileData]): RDD[AbstractFeature] = {

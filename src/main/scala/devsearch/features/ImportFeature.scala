@@ -8,7 +8,10 @@ case class ImportFeature(codeLocation: CodeFileLocation,
                          domain: String,
                          containsAsterisk: Boolean,
                          isStatic: Boolean)
-    extends AbstractFeature(codeLocation, inFilePosition)
+    extends AbstractFeature(codeLocation, inFilePosition) {
+    override def getKey(): String = "domain = " + domain
+}
+
 
 object ImportExtractor extends AbstractFeatureExtractor {
     def extract(codeFileData: RDD[CodeFileData]): RDD[AbstractFeature] = {

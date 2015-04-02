@@ -5,7 +5,9 @@ import org.apache.spark.rdd.RDD
 
 case class VariableDeclarationFeature(codeLocation: CodeFileLocation, inFilePosition: InFilePosition,
                                       variableType: String, variableName: String)
-    extends AbstractFeature(codeLocation, inFilePosition)
+    extends AbstractFeature(codeLocation, inFilePosition) {
+    override def getKey(): String = "variable declaration = " + variableName
+}
 
 object VariableDeclarationExtractor extends AbstractFeatureExtractor {
     def extract(codeFileData: RDD[CodeFileData]): RDD[AbstractFeature] = {
