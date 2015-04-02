@@ -12,7 +12,7 @@ object CodeEater {
         val emptyRDD: RDD[AbstractFeature] = sc.emptyRDD[AbstractFeature]
         List[AbstractFeatureExtractor](ImportExtractor).foldLeft(emptyRDD)(
             (acc, extractor) =>
-                sc.union(acc, extractor.extract(sc, inputData))
+                sc.union(acc, extractor.extract(inputData))
         )
     }
 }

@@ -1,22 +1,20 @@
 package devsearch.features
 
-import devsearch.parsers.JavaParser
-import org.scalatest.{Matchers, FlatSpec}
-import spray.json.JsonParser
+import org.scalatest.{FlatSpec}
 
-class ImportExtractorTest extends FlatSpec with Matchers {
+class ImportExtractorTest extends FlatSpec {
     "import extractor" should "extract all imports" in {
         val sampleCodeData = FeatureTestHelper.getSampleCodeData()
-        val importFeatures = ImportExtractor.extract(FeatureTestHelper.sc, sampleCodeData)
+        val importFeatures = ImportExtractor.extract(sampleCodeData)
 
         val codeFileLocation = new CodeFileLocation("github", "android", "AccountDataManager.java")
         assert(importFeatures.collect.toSet == Set(
-                new ImportFeature(codeFileLocation, "java.util", true, false),
-                new ImportFeature(codeFileLocation, "com.github.javaparser.ast.CompilationUnit", false, false),
-                new ImportFeature(codeFileLocation, "java.io", true, false),
-                new ImportFeature(codeFileLocation, "japa.parser.ParseException", false, false),
-                new ImportFeature(codeFileLocation, "org.junit.Ignore", false, false),
-                new ImportFeature(codeFileLocation, "com.github.javaparser.JavaParser", false, false)
+                ImportFeature(codeFileLocation, "java.util", true, false),
+                ImportFeature(codeFileLocation, "com.github.javaparser.ast.CompilationUnit", false, false),
+                ImportFeature(codeFileLocation, "java.io", true, false),
+                ImportFeature(codeFileLocation, "japa.parser.ParseException", false, false),
+                ImportFeature(codeFileLocation, "org.junit.Ignore", false, false),
+                ImportFeature(codeFileLocation, "com.github.javaparser.JavaParser", false, false)
             )
         )
     }

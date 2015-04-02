@@ -1,7 +1,6 @@
 package devsearch.features
 
 import devsearch.ast._
-import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
 case class InheritanceFeature(codeLocation: CodeFileLocation,
@@ -10,7 +9,7 @@ case class InheritanceFeature(codeLocation: CodeFileLocation,
     extends AbstractFeature(codeLocation)
 
 object InheritanceExtractor extends AbstractFeatureExtractor {
-    override def extract(sc: SparkContext, codeFileData: RDD[CodeFileData]): RDD[AbstractFeature] = {
+    override def extract(codeFileData: RDD[CodeFileData]): RDD[AbstractFeature] = {
         codeFileData.flatMap(codeFile =>
             Operators.collect[InheritanceFeature] {
                 case ClassDef(modifiers, name, annotations, tparams, superClasses, definitions, sort) =>

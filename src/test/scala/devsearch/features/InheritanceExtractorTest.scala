@@ -6,7 +6,7 @@ class InheritanceExtractorTest extends FlatSpec with Matchers {
     "inheritance extractor" should "extract all class extensions and interface implementations" in {
         val codeFileData = FeatureTestHelper.getSampleCodeData()
 
-        val inheritanceFeatures = InheritanceExtractor.extract(FeatureTestHelper.sc, codeFileData)
+        val inheritanceFeatures = InheritanceExtractor.extract(codeFileData)
         val codeFileLocation = new CodeFileLocation("github", "android", "AccountDataManager.java")
         assert(inheritanceFeatures.collect.toSet == Set(
                 new InheritanceFeature(codeFileLocation, "A", "XXX"),
