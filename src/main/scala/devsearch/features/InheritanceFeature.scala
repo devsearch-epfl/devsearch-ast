@@ -10,7 +10,7 @@ case class InheritanceFeature(codeLocation: CodeFileLocation,
 
 object InheritanceExtractor extends AbstractFeatureExtractor {
     override def extract(codeFileData: RDD[CodeFileData]): RDD[AbstractFeature] = {
-        codeFileData.flatMap(codeFile =>
+        codeFileData.flatMap { codeFile =>
             Operators.collect[InheritanceFeature] {
                 case ClassDef(modifiers, name, annotations, tparams, superClasses, definitions, sort) =>
                     superClasses.asInstanceOf[List[String]].map(superClassName =>
@@ -19,6 +19,6 @@ object InheritanceExtractor extends AbstractFeatureExtractor {
 
                 case _ => Set()
             }(codeFile.syntaxTree)
-        )
+        }
     }
 }

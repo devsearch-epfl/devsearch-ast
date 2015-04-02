@@ -10,7 +10,11 @@ case class CodeFileData(codeFileLocation: CodeFileLocation, syntaxTree: AST) ext
 object CodeEater {
     def eat(sc: SparkContext, inputData: RDD[CodeFileData]): RDD[AbstractFeature] = {
         val emptyRDD: RDD[AbstractFeature] = sc.emptyRDD[AbstractFeature]
-        List[AbstractFeatureExtractor](ImportExtractor).foldLeft(emptyRDD)(
+        List[AbstractFeatureExtractor](
+            ImportExtractor,
+            InheritanceExtractor,
+            VariableDeclarationExtractor
+        ).foldLeft(emptyRDD)(
             (acc, extractor) =>
                 sc.union(acc, extractor.extract(inputData))
         )
