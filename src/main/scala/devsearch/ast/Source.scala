@@ -8,7 +8,7 @@ case class SourceCreationError(cause: Throwable) extends Exception("Couldn't cre
  * Flexible code source base trait that is associated to AST positions. This is useful to
  * refer back to the source code from a position, be it for reporting or feature extraction.
  */
-trait Source {
+trait Source extends Serializable {
   def path: String
   def contents: Array[Char]
 
