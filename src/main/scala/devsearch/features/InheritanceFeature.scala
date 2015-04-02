@@ -4,17 +4,20 @@ import devsearch.ast._
 import org.apache.spark.rdd.RDD
 
 case class InheritanceFeature(codeLocation: CodeFileLocation,
+                              inFilePosition: InFilePosition,
                               className: String,
                               superClassName: String)
-    extends AbstractFeature(codeLocation)
+    extends AbstractFeature(codeLocation, inFilePosition)
 
 object InheritanceExtractor extends AbstractFeatureExtractor {
     override def extract(codeFileData: RDD[CodeFileData]): RDD[AbstractFeature] = {
         codeFileData.flatMap { codeFile =>
             Operators.collect[InheritanceFeature] {
-                case ClassDef(modifiers, name, annotations, tparams, superClasses, definitions, sort) =>
-                    superClasses.map(superClass =>
-                        InheritanceFeature(codeFile.codeFileLocation, name, superClass.name)
+                case classDefinition: ClassDef =>
+                    classDefinition.superClasses.map(superClass =>
+                        InheritanceFeature(codeFile.codeFileLocation,
+                                           InFilePosition(classDefinition.pos.line, classDefinition.pos.line),
+                                           classDefinition.name, superClass.name)
                     ).toSet
 
                 case _ => Set()
