@@ -2,7 +2,7 @@ package devsearch.features
 
 import org.apache.spark.rdd.RDD
 
-case class InFilePosition(line: Int, column: Int)
+case class InFilePosition(line: Int, column: Int) extends Serializable
 abstract class AbstractFeature(codeFileLocation: CodeFileLocation, inFilePosition: InFilePosition) extends Serializable {
     def getKey(): String
 }
