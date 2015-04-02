@@ -10,7 +10,7 @@ case class VariableDeclarationFeature(codeLocation: CodeFileLocation, inFilePosi
 }
 
 object VariableDeclarationExtractor extends AbstractFeatureExtractor {
-    def extract(codeFileData: RDD[CodeFileData]): RDD[AbstractFeature] = {
+    override def extract(codeFileData: RDD[CodeFileData]): RDD[AbstractFeature] = {
         codeFileData.flatMap { codeFile =>
             Operators.collect[VariableDeclarationFeature] {
                 case valueDefinition: ValDef =>

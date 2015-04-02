@@ -14,7 +14,7 @@ case class ImportFeature(codeLocation: CodeFileLocation,
 
 
 object ImportExtractor extends AbstractFeatureExtractor {
-    def extract(codeFileData: RDD[CodeFileData]): RDD[AbstractFeature] = {
+    override def extract(codeFileData: RDD[CodeFileData]): RDD[AbstractFeature] = {
         codeFileData.flatMap { codeFile =>
             Operators.collect[ImportFeature] {
                 case importStatement: Import =>
