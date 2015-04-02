@@ -14,7 +14,7 @@ object InheritanceExtractor extends AbstractFeatureExtractor {
             Operators.collect[InheritanceFeature] {
                 case ClassDef(modifiers, name, annotations, tparams, superClasses, definitions, sort) =>
                     superClasses.asInstanceOf[List[String]].map(superClassName =>
-                        new InheritanceFeature(codeFile.codeFileLocation, name, superClassName)
+                        InheritanceFeature(codeFile.codeFileLocation, name, superClassName)
                     ).toSet
 
                 case _ => Set()

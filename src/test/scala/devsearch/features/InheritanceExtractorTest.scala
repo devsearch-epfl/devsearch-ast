@@ -7,16 +7,15 @@ class InheritanceExtractorTest extends FlatSpec with Matchers {
         val codeFileData = FeatureTestHelper.getSampleCodeData()
 
         val inheritanceFeatures = InheritanceExtractor.extract(codeFileData)
-        val codeFileLocation = new CodeFileLocation("unknown_repo", "unknown_user", "JavaConcepts.java")
         assert(inheritanceFeatures.collect.toSet == Set(
-                new InheritanceFeature(codeFileLocation, "A", "XXX"),
-                new InheritanceFeature(codeFileLocation, "Y", "X"),
-                new InheritanceFeature(codeFileLocation, "XXX", "Serializable"),
-                new InheritanceFeature(codeFileLocation, "JavaConcepts", "Base"),
-                new InheritanceFeature(codeFileLocation, "JavaConcepts", "Serializable"),
-                new InheritanceFeature(codeFileLocation, "XXX", "Cloneable"),
-                new InheritanceFeature(codeFileLocation, "A", "Serializable"),
-                new InheritanceFeature(codeFileLocation, "QWE", "JavaConcepts")
+                InheritanceFeature(FeatureTestHelper.codeFileLocation, "A", "XXX"),
+                InheritanceFeature(FeatureTestHelper.codeFileLocation, "Y", "X"),
+                InheritanceFeature(FeatureTestHelper.codeFileLocation, "XXX", "Serializable"),
+                InheritanceFeature(FeatureTestHelper.codeFileLocation, "JavaConcepts", "Base"),
+                InheritanceFeature(FeatureTestHelper.codeFileLocation, "JavaConcepts", "Serializable"),
+                InheritanceFeature(FeatureTestHelper.codeFileLocation, "XXX", "Cloneable"),
+                InheritanceFeature(FeatureTestHelper.codeFileLocation, "A", "Serializable"),
+                InheritanceFeature(FeatureTestHelper.codeFileLocation, "QWE", "JavaConcepts")
             )
         )
     }

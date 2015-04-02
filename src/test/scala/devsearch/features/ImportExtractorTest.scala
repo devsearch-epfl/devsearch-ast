@@ -7,14 +7,13 @@ class ImportExtractorTest extends FlatSpec {
         val sampleCodeData = FeatureTestHelper.getSampleCodeData()
         val importFeatures = ImportExtractor.extract(sampleCodeData)
 
-        val codeFileLocation = new CodeFileLocation("unknown_repo", "unknown_user", "JavaConcepts.java")
         assert(importFeatures.collect.toSet == Set(
-                ImportFeature(codeFileLocation, "java.util", true, false),
-                ImportFeature(codeFileLocation, "com.github.javaparser.ast.CompilationUnit", false, false),
-                ImportFeature(codeFileLocation, "java.io", true, false),
-                ImportFeature(codeFileLocation, "japa.parser.ParseException", false, false),
-                ImportFeature(codeFileLocation, "org.junit.Ignore", false, false),
-                ImportFeature(codeFileLocation, "com.github.javaparser.JavaParser", false, false)
+                ImportFeature(FeatureTestHelper.codeFileLocation, "java.util", true, false),
+                ImportFeature(FeatureTestHelper.codeFileLocation, "com.github.javaparser.ast.CompilationUnit", false, false),
+                ImportFeature(FeatureTestHelper.codeFileLocation, "java.io", true, false),
+                ImportFeature(FeatureTestHelper.codeFileLocation, "japa.parser.ParseException", false, false),
+                ImportFeature(FeatureTestHelper.codeFileLocation, "org.junit.Ignore", false, false),
+                ImportFeature(FeatureTestHelper.codeFileLocation, "com.github.javaparser.JavaParser", false, false)
             )
         )
     }
