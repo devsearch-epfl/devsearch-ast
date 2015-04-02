@@ -7,6 +7,7 @@ class VariableDeclarationExtractorTest extends FlatSpec with Matchers {
         val codeFileData = FeatureTestHelper.getSampleCodeData()
 
         val variableDeclarationFeatures = VariableDeclarationExtractor.extract(codeFileData)
+        // TODO(julien, mateusz): add a test for each type name
         assert(
             Set[AbstractFeature](
                 VariableDeclarationFeature(FeatureTestHelper.codeFileLocation, InFilePosition(376, 26), "Exception", "e"),

@@ -12,6 +12,7 @@ case class VariableDeclarationFeature(codeLocation: CodeFileLocation, inFilePosi
 object VariableDeclarationExtractor extends AbstractFeatureExtractor {
 
     def convertTypeToString(tpe: Type): String = {
+        // TODO(julien, mateusz): need to integrate as many types as possible, and make current strings more readable
         tpe match {
             case classType: ClassType => classType.name
             case primitiveType: PrimitiveType => primitiveType.getClass.getCanonicalName
