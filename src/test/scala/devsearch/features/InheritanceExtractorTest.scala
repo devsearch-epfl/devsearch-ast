@@ -7,7 +7,7 @@ class InheritanceExtractorTest extends FlatSpec with Matchers {
         val codeFileData = FeatureTestHelper.getSampleCodeData()
 
         val inheritanceFeatures = InheritanceExtractor.extract(codeFileData)
-        val codeFileLocation = new CodeFileLocation("github", "android", "AccountDataManager.java")
+        val codeFileLocation = new CodeFileLocation("unknown_repo", "unknown_user", "JavaConcepts.java")
         assert(inheritanceFeatures.collect.toSet == Set(
                 new InheritanceFeature(codeFileLocation, "A", "XXX"),
                 new InheritanceFeature(codeFileLocation, "Y", "X"),

@@ -8,10 +8,10 @@ object FeatureTestHelper {
     val sc = new SparkContext(new SparkConf().setAppName("featureTest").setMaster("local"))
 
     private def generateSingleCodeFileData(): CodeFileData = {
-        val fileURL = getClass.getResource("/samples/AccountDataManager.java")
+        val fileURL = getClass.getResource("/samples/JavaConcepts.java")
         val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
 
-        val codeFileLocation = new CodeFileLocation("github", "android", "AccountDataManager.java")
+        val codeFileLocation = new CodeFileLocation("unknown_repo", "unknown_user", "JavaConcepts.java")
         new CodeFileData(codeFileLocation, JavaParser.parse(filePath))
     }
 
