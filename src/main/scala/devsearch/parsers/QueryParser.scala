@@ -169,10 +169,20 @@ object QueryParser extends Parser {
           (if (mods.hasFlag(Flag.FINAL) || !mods.hasFlag(Flag.MUTABLE)) Modifiers.FINAL else NoModifiers) |
           (if (mods.hasFlag(Flag.DEFERRED) || mods.hasFlag(Flag.ABSTRACT)) Modifiers.ABSTRACT else NoModifiers)
 
+        def annotationArgs(args: List[ast.Expr]): Map[String, ast.Expr] = Map(args.map {
+          case ast.Assign(ast.Ident(name), rhs, _) => name -> rhs
+          case ast.Assign(lhs, rhs, _) => lhs.toString -> rhs
+          case expr => Names.DEFAULT -> expr
+        } : _*)
+
         val annots = (if (mods.hasFlag(Flag.OVERRIDE))
             List(ast.Annotation(Names.OVERRIDE_ANNOTATION).setPos(pos))
           else
             Nil) ++ mods.annotations.flatMap(a => extractExpr(a) match {
+              case cc @ ast.ConstructorCall(ct @ ast.ClassType(ast.Empty.NoExpr, name, Nil, Nil), args, Nil) =>
+                List(ast.Annotation(name, annotationArgs(args)).fromAST(ct).fromAST(cc))
+              case cc @ ast.ConstructorCall(ct : ast.ClassType, args, Nil) =>
+                List(ast.Annotation(ct.toString, annotationArgs(args)).fromAST(ct).fromAST(cc))
               case _ => Nil
             })
 
@@ -444,9 +454,10 @@ object QueryParser extends Parser {
           case build.SyntacticForYield(enums, body) => extractFors(enums, extractExpr(body), true)
 
           case Apply(fun, args) => extractExpr(fun) match {
+            case a @ ast.FieldAccess(cc : ast.ConstructorCall, "<init>", tparams) =>
+              cc.copy(args = cc.args ++ args.map(extractExpr)).fromAST(cc).fromAST(a)
             case a @ ast.FieldAccess(receiver, name, tparams) =>
               ast.FunctionCall(ast.FieldAccess(receiver, name, Nil).fromAST(a), tparams, args.map(extractExpr))
-            case n : ast.ConstructorCall => n.copy(args = n.args ++ args.map(extractExpr)).fromAST(n)
             case caller => ast.FunctionCall(caller, Nil, args.map(extractExpr))
           }
 
@@ -513,6 +524,9 @@ object QueryParser extends Parser {
             ast.Guarded(bound, ast.InstanceOf(ast.Ident(name).setPos(bound.pos), extractType(tpt)).setPos(bound.pos))
 
           case Star(elem) => ast.UnaryOp(extractExpr(elem), "*", true)
+
+          case AssignOrNamedArg(left, right) =>
+            ast.Assign(extractExpr(left), extractExpr(right), None)
 
           // While loops can take place in expression positions in Scala
           case ld: LabelDef => ast.Block(extractStmts(ld) :+ ast.VoidLiteral)

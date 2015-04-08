@@ -132,6 +132,25 @@ class QueryParserTest extends FlatSpec with Matchers {
         Block(List(FunctionCall(Ident("println"),List(),List(FieldAccess(Ident("a"),"next",List())))))))))
   }
 
+  it should "work for named arguments" in {
+    val source = new ContentsSource("NoFile", "test(a = 1, b = 2)")
+
+    assert(QueryParser.parse(source) == Block(List(
+      FunctionCall(Ident("test"),List(),List(
+        Assign(Ident("a"),SimpleLiteral(PrimitiveTypes.Int,"1"),None),
+        Assign(Ident("b"),SimpleLiteral(PrimitiveTypes.Int,"2"),None))))))
+  }
+
+  it should "work for annotations" in {
+    val source = new ContentsSource("NoFile", "@annot(a = 1, b = 2) val a = 1")
+
+    assert(QueryParser.parse(source) == Block(List(
+      ValDef(FINAL,"a",List(Annotation("annot",Map(
+        "a" -> SimpleLiteral(PrimitiveTypes.Int,"1"),
+        "b" -> SimpleLiteral(PrimitiveTypes.Int,"2")
+      ))),NoType,SimpleLiteral(PrimitiveTypes.Int,"1"),false))))
+  }
+
   /*
   it should "be robust" in {
     val source = new ContentsSource("NoFile", """
