@@ -34,15 +34,14 @@ object QueryParser extends Parser {
     case abort: scala.reflect.macros.runtime.AbortMacroException => throw ParsingFailedError(abort)
   }
 
-  private class QueryCompiler extends {
-    val c = new {
+  private class QueryCompiler extends Quasiquotes { self =>
+    object c extends {
       val universe: compiler.type = compiler
       val expandee = universe.EmptyTree
       val callsiteTyper = universe.analyzer.newTyper(universe.analyzer.NoContext)
     } with scala.reflect.macros.runtime.Context {
       val prefix = Expr[Nothing](universe.EmptyTree)(TypeTag.Nothing)
     }
-  } with Quasiquotes { self =>
 
     import global._
     import compat.{gen, build}
