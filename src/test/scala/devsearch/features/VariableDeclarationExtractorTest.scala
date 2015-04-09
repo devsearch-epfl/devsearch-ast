@@ -4,7 +4,7 @@ import org.scalatest.{Matchers, FlatSpec}
 
 class VariableDeclarationExtractorTest extends FlatSpec with Matchers {
     "variable declaration extractor" should "extract all variable declarations" in {
-        val codeFileData = FeatureTestHelper.getSampleCodeData()
+      FeatureTestHelper.withSampleCodeData { codeFileData =>
 
         val variableDeclarationFeatures = VariableDeclarationExtractor.extract(codeFileData)
         // TODO(julien, mateusz): add a test for each type name
@@ -15,5 +15,6 @@ class VariableDeclarationExtractorTest extends FlatSpec with Matchers {
                 VariableDeclarationFeature(FeatureTestHelper.codeFileLocation, InFilePosition(109,18), "Array[Array[devsearch.ast.PrimitiveTypes.Int$]]", "arr4")
             ).subsetOf(variableDeclarationFeatures.collect.toSet)
         )
+      }
     }
 }

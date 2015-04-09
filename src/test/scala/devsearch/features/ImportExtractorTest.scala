@@ -4,7 +4,7 @@ import org.scalatest.{FlatSpec}
 
 class ImportExtractorTest extends FlatSpec {
     "import extractor" should "extract all imports" in {
-        val sampleCodeData = FeatureTestHelper.getSampleCodeData()
+      FeatureTestHelper.withSampleCodeData { sampleCodeData =>
         val importFeatures = ImportExtractor.extract(sampleCodeData)
 
         assert(importFeatures.collect.toSet == Set(
@@ -16,5 +16,6 @@ class ImportExtractorTest extends FlatSpec {
                 ImportFeature(FeatureTestHelper.codeFileLocation, InFilePosition(3, 1), "com.github.javaparser.JavaParser", false, false)
             )
         )
+      }
     }
 }

@@ -4,7 +4,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class InheritanceExtractorTest extends FlatSpec with Matchers {
     "inheritance extractor" should "extract all class extensions and interface implementations" in {
-        val codeFileData = FeatureTestHelper.getSampleCodeData()
+      FeatureTestHelper.withSampleCodeData { codeFileData =>
 
         val inheritanceFeatures = InheritanceExtractor.extract(codeFileData)
         assert(inheritanceFeatures.collect.toSet == Set(
@@ -18,5 +18,6 @@ class InheritanceExtractorTest extends FlatSpec with Matchers {
                 InheritanceFeature(FeatureTestHelper.codeFileLocation, InFilePosition(208, 208), "QWE", "JavaConcepts")
             )
         )
+      }
     }
 }

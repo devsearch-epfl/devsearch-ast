@@ -29,3 +29,5 @@ libraryDependencies ++= Seq(
   "com.github.nikita-volkov" % "sext" % "0.2.3",
   "org.apache.spark" %% "spark-core" % "1.3.0"
 )
+
+parallelExecution in Test := false
