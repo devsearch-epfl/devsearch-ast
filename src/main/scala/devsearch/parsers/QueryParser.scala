@@ -46,9 +46,11 @@ object QueryParser extends Parser {
     import global._
     import compat.{gen, build}
     import build.implodePatDefs
+    import scala.collection.mutable.ListBuffer
 
     object parser extends Parser {
-      def entryPoint = parser => Q(implodePatDefs(gen.mkTreeOrBlock(parser.templateOrTopStatSeq())))
+      // We're not going to use the entryPoint as this limits robust parsing
+      def entryPoint = parser => EmptyTree
 
       // Quick fix to make sure we have range positions everywhere even if they don't make sense...
       // Without this, we get crashes in the Paradise parser in TreeGen.mkFor where range positions are expected
@@ -68,12 +70,7 @@ object QueryParser extends Parser {
 
       def parse(source: SourceFile): Tree = {
         try {
-          scala.util.Try {
-            val parser = new HoleParser(source)
-            parser.checkNoEscapingPlaceholders { parser.parseRule(entryPoint) }
-          }.orElse(scala.util.Try {
-            new HoleParser(source).compilationUnit()
-          }).get
+          new RobustParser(source).smartParse()
         } catch {
           case mi: MalformedInput =>
             if (posMap.isEmpty) c.abort(NoPosition, "Unparsable stuff: " + mi.msg)
@@ -100,6 +97,328 @@ object QueryParser extends Parser {
             in.nextToken()
             dfltName 
           } else super.ident(skipIt)
+
+        def reflectedPkgQualId(): Tree = {
+          import scala.reflect.runtime.{universe => ru}
+          val m = ru.runtimeMirror(getClass.getClassLoader)
+          val im = m.reflect(this)
+
+          val sym = ru.typeOf[HoleParser].member(ru.newTermName("pkgQualId")).asMethod
+          im.reflectMethod(sym).apply().asInstanceOf[Tree]
+        }
+
+        def queryCode(): Tree = checkNoEscapingPlaceholders {
+          def topstats(): List[Tree] = {
+            val ts = new ListBuffer[Tree]
+            while (in.token == SEMI) in.nextToken()
+            val start = in.offset
+            if (in.token == PACKAGE) {
+              in.nextToken()
+              if (in.token == OBJECT) {
+                ts ++= joinComment(List(makePackageObject(start, objectDef(in.offset, NoMods))))
+                if (in.token != EOF) {
+                  acceptStatSep()
+                  ts ++= topStatSeq()
+                }
+              } else {
+                in.flushDoc
+                val pkg = reflectedPkgQualId()
+
+                if (in.token == EOF) {
+                  ts += makePackaging(start, pkg, List())
+                } else if (isStatSep) {
+                  in.nextToken()
+                  ts += makePackaging(start, pkg, topstats())
+                } else {
+                  ts += inBraces(makePackaging(start, pkg, templateOrTopStatSeq()))
+                  acceptStatSepOpt()
+                  ts ++= templateOrTopStatSeq()
+                }
+              }
+            } else {
+              ts ++= templateOrTopStatSeq()
+            }
+            ts.toList
+          }
+
+          resetPackage()
+          gen.mkTreeOrBlock(topstats())
+        }
+
+        override def parseStartRule = () => queryCode()
+      }
+
+      import scala.tools.nsc.ast.parser._
+      import scala.reflect.internal.Chars.{ LF, CR }
+
+      /** Based on scalac's UnitParser */
+      class RobustParser(source0: SourceFile, patches: List[BracePatch]) extends HoleParser(source0) {
+        def this(source0: SourceFile) = this(source0, Nil)
+
+        override def newScanner() = new RobustScanner(source0, patches)
+
+        private var smartParsing = false
+        @inline private def withSmartParsing[T](body: => T): T = {
+          val saved = smartParsing
+          smartParsing = true
+          try body
+          finally smartParsing = saved
+        }
+
+        def withPatches(patches: List[BracePatch]) = new RobustParser(source0, patches)
+
+        val syntaxErrors = new ListBuffer[(Int, String)]
+
+        override def syntaxError(offset: Offset, msg: String) {
+          if (smartParsing) syntaxErrors += ((offset, msg))
+          else super.syntaxError(offset, msg)
+        }
+
+        override def incompleteInputError(msg: String) {
+          val offset = source.content.length - 1
+          if (smartParsing) syntaxErrors += ((offset, msg))
+          else super.incompleteInputError(msg)
+        }
+
+        /** parse unit. If there are inbalanced braces, try to correct them and reparse. */
+        def smartParse(): Tree = withSmartParsing {
+          val firstTry = parse()
+          if (syntaxErrors.isEmpty) firstTry
+          else in.healBraces() match {
+            case Nil      =>
+              val (offset, msg) = syntaxErrors.head
+              throw new MalformedInput(offset, msg)
+            case patches  => (this withPatches patches).parse()
+          }
+        }
+      }
+
+      /** Based on scalac's UnitScanner */
+      class RobustScanner(source0: SourceFile, patches: List[BracePatch]) extends SourceFileScanner(source0) {
+        def this(source0: SourceFile) = this(source0, Nil)
+
+        private var bracePatches: List[BracePatch] = patches
+
+        lazy val parensAnalyzer = new ParensAnalyzer(source0, Nil)
+
+        override def parenBalance(token: Token) = parensAnalyzer.balance(token)
+
+        override def healBraces(): List[BracePatch] = {
+          var patches: List[BracePatch] = List()
+          if (!parensAnalyzer.tabSeen) {
+            var bal = parensAnalyzer.balance(RBRACE)
+            while (bal < 0) {
+              patches = new ParensAnalyzer(source0, patches).insertRBrace()
+              bal += 1
+            }
+            while (bal > 0) {
+              patches = new ParensAnalyzer(source0, patches).deleteRBrace()
+              bal -= 1
+            }
+          }
+          patches
+        }
+
+        /** Insert or delete a brace, if a patch exists for this offset */
+        override def applyBracePatch(): Boolean = {
+          if (bracePatches.isEmpty || bracePatches.head.off != offset) false
+          else {
+            val patch = bracePatches.head
+            bracePatches = bracePatches.tail
+            //        println("applying brace patch "+offset)//DEBUG
+            if (patch.inserted) {
+              next copyFrom this
+              // TODO: warn ??
+              // error(offset, "Missing closing brace `}' assumed here")
+              token = RBRACE
+              true
+            } else {
+              // TODO: warn ??
+              // error(offset, "Unmatched closing brace '}' ignored here")
+              fetchToken()
+              false
+            }
+          }
+        }
+      }
+
+      /** Based on scalac's ParensAnalyzer */
+      class ParensAnalyzer(source0: SourceFile, patches: List[BracePatch]) extends RobustScanner(source0, patches) {
+        val balance = scala.collection.mutable.Map(RPAREN -> 0, RBRACKET -> 0, RBRACE -> 0)
+
+        init()
+
+        /** The offset of the first token on this line, or next following line if blank
+         */
+        val lineStart = new scala.collection.mutable.ArrayBuffer[Int]
+
+        /** The list of matching top-level brace pairs (each of which may contain nested brace pairs).
+         */
+        val bracePairs: List[BracePair] = {
+
+          var lineCount = 1
+          var lastOffset = 0
+          var indent = 0
+          val oldBalance = scala.collection.mutable.Map[Int, Int]()
+          def markBalance() = for ((k, v) <- balance) oldBalance(k) = v
+          markBalance()
+
+          def scan(bpbuf: ListBuffer[BracePair]): (Int, Int) = {
+            if (token != NEWLINE && token != NEWLINES) {
+              while (lastOffset < offset) {
+                if (buf(lastOffset) == LF) lineCount += 1
+                lastOffset += 1
+              }
+              while (lineCount > lineStart.length) {
+                lineStart += offset
+                // reset indentation unless there are new opening brackets or
+                // braces since last ident line and at the same time there
+                // are no new braces.
+                if (balance(RPAREN) >= oldBalance(RPAREN) &&
+                  balance(RBRACKET) >= oldBalance(RBRACKET) ||
+                balance(RBRACE) != oldBalance(RBRACE)) {
+                  indent = column(offset)
+                  markBalance()
+                }
+              }
+            }
+
+            token match {
+              case LPAREN =>
+                balance(RPAREN) -= 1; nextToken(); scan(bpbuf)
+              case LBRACKET =>
+                balance(RBRACKET) -= 1; nextToken(); scan(bpbuf)
+              case RPAREN =>
+                balance(RPAREN) += 1; nextToken(); scan(bpbuf)
+              case RBRACKET =>
+                balance(RBRACKET) += 1; nextToken(); scan(bpbuf)
+              case LBRACE =>
+                balance(RBRACE) -= 1
+                val lc = lineCount
+                val loff = offset
+                val lindent = indent
+                val bpbuf1 = new ListBuffer[BracePair]
+                nextToken()
+                val (roff, rindent) = scan(bpbuf1)
+                if (lc != lineCount)
+                  bpbuf += BracePair(loff, lindent, roff, rindent, bpbuf1.toList)
+                scan(bpbuf)
+              case RBRACE =>
+                balance(RBRACE) += 1
+                val off = offset; nextToken(); (off, indent)
+              case EOF =>
+                (-1, -1)
+              case _ =>
+                nextToken(); scan(bpbuf)
+            }
+          }
+
+          val bpbuf = new ListBuffer[BracePair]
+          while (token != EOF) {
+            val (roff, rindent) = scan(bpbuf)
+            if (roff != -1) {
+              val current = BracePair(-1, -1, roff, rindent, bpbuf.toList)
+              bpbuf.clear()
+              bpbuf += current
+            }
+          }
+          def bracePairString(bp: BracePair, indent: Int): String = {
+            val rangeString = {
+              import bp._
+              val lline = line(loff)
+              val rline = line(roff)
+              val tokens = List(lline, lindent, rline, rindent) map (n => if (n < 0) "??" else "" + n)
+              "%s:%s to %s:%s".format(tokens: _*)
+            }
+            val outer  = (" " * indent) + rangeString
+            val inners = bp.nested map (bracePairString(_, indent + 2))
+
+            if (inners.isEmpty) outer
+            else inners.mkString(outer + "\n", "\n", "")
+          }
+          def bpString    = bpbuf.toList map ("\n" + bracePairString(_, 0)) mkString ""
+          def startString = lineStart.mkString("line starts: [", ", ", "]")
+
+          log(s"\n$startString\n$bpString")
+          bpbuf.toList
+        }
+
+        var tabSeen = false
+
+        def line(offset: Offset): Int = {
+          def findLine(lo: Int, hi: Int): Int = {
+            val mid = (lo + hi) / 2
+            if (offset < lineStart(mid)) findLine(lo, mid - 1)
+            else if (mid + 1 < lineStart.length && offset >= lineStart(mid + 1)) findLine(mid + 1, hi)
+            else mid
+          }
+          if (offset <= 0) 0
+          else findLine(0, lineStart.length - 1)
+        }
+
+        def column(offset: Offset): Int = {
+          var col = 0
+          var i = offset - 1
+          while (i >= 0 && buf(i) != CR && buf(i) != LF) {
+            if (buf(i) == '\t') tabSeen = true
+            col += 1
+          i -= 1
+          }
+          col
+        }
+
+        def insertPatch(patches: List[BracePatch], patch: BracePatch): List[BracePatch] = patches match {
+          case List() => List(patch)
+          case bp :: bps => if (patch.off < bp.off) patch :: patches
+          else bp :: insertPatch(bps, patch)
+        }
+
+        def insertRBrace(): List[BracePatch] = {
+          def insert(bps: List[BracePair]): List[BracePatch] = bps match {
+            case List() => patches
+            case (bp @ BracePair(loff, lindent, roff, rindent, nested)) :: bps1 =>
+              if (lindent <= rindent) insert(bps1)
+              else {
+                //           println("patch inside "+bp+"/"+line(loff)+"/"+lineStart(line(loff))+"/"+lindent"/"+rindent)//DEBUG
+                val patches1 = insert(nested)
+                if (patches1 ne patches) patches1
+                else {
+                  var lin = line(loff) + 1
+                  while (lin < lineStart.length && column(lineStart(lin)) > lindent)
+                    lin += 1
+                    if (lin < lineStart.length) {
+                      val patches1 = insertPatch(patches, BracePatch(lineStart(lin), inserted = true))
+                      //println("patch for "+bp+"/"+imbalanceMeasure+"/"+new ParensAnalyzer(unit, patches1).imbalanceMeasure)
+                      /*if (improves(patches1))*/
+                     patches1
+                     /*else insert(bps1)*/
+                    // (this test did not seem to work very well in practice)
+                    } else patches
+                }
+              }
+          }
+          insert(bracePairs)
+        }
+
+        def deleteRBrace(): List[BracePatch] = {
+          def delete(bps: List[BracePair]): List[BracePatch] = bps match {
+            case List() => patches
+            case BracePair(loff, lindent, roff, rindent, nested) :: bps1 =>
+              if (lindent >= rindent) delete(bps1)
+              else {
+                val patches1 = delete(nested)
+                if (patches1 ne patches) patches1
+                else insertPatch(patches, BracePatch(roff, inserted = false))
+              }
+          }
+          delete(bracePairs)
+        }
+
+        // don't emit deprecation warnings about identifiers like `macro` or `then`
+        // when skimming through the source file trying to heal braces
+        override def emitIdentifierDeprecationWarnings = false
+
+        override def error(offset: Offset, msg: String) {}
       }
     }
 
@@ -540,13 +859,12 @@ object QueryParser extends Parser {
       }
 
       Normalizer(tree match {
-        case d: DefTree => extractDef(d)
-        case t: TermTree => extractStmts(t) match {
+        case t: TypTree => extractType(t)
+        case _ => extractStmts(tree) match {
           case List(x) => x
           case Nil => ast.Empty[ast.Statement]
           case list => ast.Block(list).setPos(extractPosition(tree.pos))
         }
-        case t: TypTree => extractType(t)
       })
     }
   }

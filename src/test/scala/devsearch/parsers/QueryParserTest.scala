@@ -37,24 +37,23 @@ class QueryParserTest extends FlatSpec with Matchers {
            e <- List.range(3,4)) yield i + e + a
     """)
 
-    assert(QueryParser.parse(source) == Block(List(
-      Foreach(
-        List(ValDef(FINAL,"i",List(),NoType,NoExpr,false)),
-        FunctionCall(
-          FieldAccess(Ident("List"),"range",List()),List(),List(
-            SimpleLiteral(PrimitiveTypes.Int,"1"),
-            SimpleLiteral(PrimitiveTypes.Int,"2")
-          )),Block(List(
-            ValDef(FINAL,"a",List(),NoType,SimpleLiteral(PrimitiveTypes.Int,"2"),false),
+    assert(QueryParser.parse(source) == Foreach(
+      List(ValDef(FINAL,"i",List(),NoType,NoExpr,false)),
+      FunctionCall(
+        FieldAccess(Ident("List"),"range",List()),List(),List(
+          SimpleLiteral(PrimitiveTypes.Int,"1"),
+          SimpleLiteral(PrimitiveTypes.Int,"2")
+        )),Block(List(
+          ValDef(FINAL,"a",List(),NoType,SimpleLiteral(PrimitiveTypes.Int,"2"),false),
+          Foreach(
+            List(ValDef(FINAL,"_",List(),NoType,NoExpr,false)),
+            Ident("toto"),
             Foreach(
-              List(ValDef(FINAL,"_",List(),NoType,NoExpr,false)),
-              Ident("toto"),
-              Foreach(
-                List(ValDef(FINAL,"e",List(),NoType,NoExpr,false)),
-                FunctionCall(FieldAccess(Ident("List"),"range",List()),List(),List(
-                  SimpleLiteral(PrimitiveTypes.Int,"3"),
-                  SimpleLiteral(PrimitiveTypes.Int,"4")
-                )), BinaryOp(BinaryOp(Ident("i"),"+",Ident("e")),"+",Ident("a")),true),true))),true))))
+              List(ValDef(FINAL,"e",List(),NoType,NoExpr,false)),
+              FunctionCall(FieldAccess(Ident("List"),"range",List()),List(),List(
+                SimpleLiteral(PrimitiveTypes.Int,"3"),
+                SimpleLiteral(PrimitiveTypes.Int,"4")
+              )), BinaryOp(BinaryOp(Ident("i"),"+",Ident("e")),"+",Ident("a")),true),true))),true))
   }
 
   it should "parse varArgs" in {
@@ -62,10 +61,9 @@ class QueryParserTest extends FlatSpec with Matchers {
       def test(a: String*)
     """)
 
-    assert(QueryParser.parse(source) == Block(List(
-      FunctionDef(FINAL | ABSTRACT,"test",List(),List(),
-        List(ValDef(FINAL,"a",List(),PrimitiveTypes.String,NoExpr,true)),
-        PrimitiveTypes.Void, NoStmt))))
+    assert(QueryParser.parse(source) == FunctionDef(FINAL | ABSTRACT,"test",List(),List(),
+      List(ValDef(FINAL,"a",List(),PrimitiveTypes.String,NoExpr,true)),
+      PrimitiveTypes.Void, NoStmt))
   }
 
   it should "parse primitive types" in {
@@ -88,7 +86,7 @@ class QueryParserTest extends FlatSpec with Matchers {
   it should "parse null literal" in {
     val source = new ContentsSource("NoFile", "val a = null")
 
-    assert(QueryParser.parse(source) == Block(List(ValDef(FINAL,"a",List(),NoType,NullLiteral,false))))
+    assert(QueryParser.parse(source) == ValDef(FINAL,"a",List(),NoType,NullLiteral,false))
   }
 
   it should "parse loops" in {
@@ -99,11 +97,11 @@ class QueryParserTest extends FlatSpec with Matchers {
       }
     """)
 
-    assert(QueryParser.parse(source) == Block(List(
-      While(BinaryOp(Ident("a"),"<",SimpleLiteral(PrimitiveTypes.Int,"0")),
-        Block(List(
-          Assign(Ident("a"),SimpleLiteral(PrimitiveTypes.Int,"1"), Some("+")),
-          FunctionCall(Ident("println"),List(),List(Ident("a")))))))))
+    assert(QueryParser.parse(source) == While(
+      BinaryOp(Ident("a"),"<",SimpleLiteral(PrimitiveTypes.Int,"0")),
+      Block(List(
+        Assign(Ident("a"),SimpleLiteral(PrimitiveTypes.Int,"1"), Some("+")),
+        FunctionCall(Ident("println"),List(),List(Ident("a")))))))
   }
 
   it should "parse expression loops" in {
@@ -113,11 +111,10 @@ class QueryParserTest extends FlatSpec with Matchers {
       }
     """)
 
-    assert(QueryParser.parse(source) == Block(List(
-      ValDef(FINAL,"a",List(),NoType,Block(List(
-        While(BinaryOp(Ident("b"),"<",SimpleLiteral(PrimitiveTypes.Int,"0")),
-          Block(List(Assign(Ident("b"),SimpleLiteral(PrimitiveTypes.Int,"1"),Some("+"))))),
-        VoidLiteral)),false))))
+    assert(QueryParser.parse(source) == ValDef(FINAL,"a",List(),NoType,Block(List(
+      While(BinaryOp(Ident("b"),"<",SimpleLiteral(PrimitiveTypes.Int,"0")),
+        Block(List(Assign(Ident("b"),SimpleLiteral(PrimitiveTypes.Int,"1"),Some("+"))))),
+      VoidLiteral)),false))
   }
 
   it should "parse do-while statements" in {
@@ -127,38 +124,34 @@ class QueryParserTest extends FlatSpec with Matchers {
       } while (a.hasNext)
     """)
 
-    assert(QueryParser.parse(source) == Block(List(
-      Do(FieldAccess(Ident("a"),"hasNext",List()),
-        Block(List(FunctionCall(Ident("println"),List(),List(FieldAccess(Ident("a"),"next",List())))))))))
+    assert(QueryParser.parse(source) == Do(FieldAccess(Ident("a"),"hasNext",List()),
+      Block(List(FunctionCall(Ident("println"),List(),List(FieldAccess(Ident("a"),"next",List())))))))
   }
 
   it should "work for named arguments" in {
     val source = new ContentsSource("NoFile", "test(a = 1, b = 2)")
 
-    assert(QueryParser.parse(source) == Block(List(
-      FunctionCall(Ident("test"),List(),List(
-        Assign(Ident("a"),SimpleLiteral(PrimitiveTypes.Int,"1"),None),
-        Assign(Ident("b"),SimpleLiteral(PrimitiveTypes.Int,"2"),None))))))
+    assert(QueryParser.parse(source) == FunctionCall(Ident("test"),List(),List(
+      Assign(Ident("a"),SimpleLiteral(PrimitiveTypes.Int,"1"),None),
+      Assign(Ident("b"),SimpleLiteral(PrimitiveTypes.Int,"2"),None))))
   }
 
   it should "work for annotations" in {
     val source = new ContentsSource("NoFile", "@annot(a = 1, b = 2) val a = 1")
 
-    assert(QueryParser.parse(source) == Block(List(
-      ValDef(FINAL,"a",List(Annotation("annot",Map(
+    assert(QueryParser.parse(source) == ValDef(FINAL,"a",List(Annotation("annot",Map(
         "a" -> SimpleLiteral(PrimitiveTypes.Int,"1"),
         "b" -> SimpleLiteral(PrimitiveTypes.Int,"2")
-      ))),NoType,SimpleLiteral(PrimitiveTypes.Int,"1"),false))))
+      ))),NoType,SimpleLiteral(PrimitiveTypes.Int,"1"),false))
   }
 
-  /*
   it should "be robust" in {
     val source = new ContentsSource("NoFile", """
       def test(a: Int) = {
         a + 1
     """)
 
-    println(QueryParser.parse(source))
+    // just make sure parser doesn't crash
+    QueryParser.parse(source)
   }
-      */
 }
