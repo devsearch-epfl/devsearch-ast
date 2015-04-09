@@ -1,0 +1,16 @@
+9999:Java/samarion/repo-name/path/to/file
+class ClassWithAConstructor {
+ protected ClassWithAConstructor(int a, String b) throws This, AndThat, AndWhatElse {
+ }
+}
+
+7777:Java/samarion/other_repo-name/path/to/another/file
+package com.github.javapasrser.bdd.parsing;
+import java.util.function.Function;
+public class ParameterizedLambdas {
+  public static void main(String[] args) {
+    Function<Integer,String> f1 = (Integer i) -> String.valueOf(i);
+    Function<Integer,String> f2 = (i) -> String.valueOf(i);
+    Function<Integer,String> f3 = i -> String.valueOf(i);
+  }
+}
