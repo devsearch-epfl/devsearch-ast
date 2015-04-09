@@ -18,6 +18,7 @@ libraryDependencies ++= Seq(
 libraryDependencies ++= Seq(
   "com.github.javaparser" % "javaparser-core" % "2.0.0",
   "com.chuusai" % "shapeless_2.10.4" % "2.0.0",
+  "org.scalamacros" % "paradise" % "2.1.0-M5" cross CrossVersion.full,
   "io.spray" %%  "spray-json" % "1.3.1"
 )
 

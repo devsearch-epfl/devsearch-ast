@@ -121,11 +121,12 @@ object Operators {
           PackageDef(name, newAnnots, newImports, newDefs).fromAST(ast)
         })
 
-      case TypeDef(name /*String*/, annotations /*List[Annotation]*/, lowerBounds /*List[Type]*/, superBounds /*List[Type]*/) =>
-        val sizes = ASTS(annotations) :: ASTS(lowerBounds) :: ASTS(superBounds) :: HNil
-        (annotations ++ lowerBounds ++ superBounds, asts => {
-          val newAnnots :: newLowers :: newSupers :: HNil = splits(asts, sizes)
-          TypeDef(name, newAnnots, newLowers, newSupers).fromAST(ast)
+      case TypeDef(modifiers /*Modifiers*/, name /*String*/, annotations /*List[Annotation]*/, tparams /*List[TypeDef]*/,
+                   lowerBounds /*List[Type]*/, superBounds /*List[Type]*/) =>
+        val sizes = ASTS(annotations) :: ASTS(tparams) :: ASTS(lowerBounds) :: ASTS(superBounds) :: HNil
+        (annotations ++ tparams ++ lowerBounds ++ superBounds, asts => {
+          val newAnnots :: newTParams :: newLowers :: newSupers :: HNil = splits(asts, sizes)
+          TypeDef(modifiers, name, newAnnots, newTParams, newLowers, newSupers).fromAST(ast)
         })
 
       case ClassDef(modifiers /*Modifiers*/, name /*String*/, annotations /*List[Annotation]*/, tparams /*List[TypeDef]*/,
@@ -158,12 +159,12 @@ object Operators {
           AnnotationDef(modifiers, name, newAnnots, newMembers).fromAST(ast)
         })
 
-      case ConstructorDef(modifiers /*Modifiers*/, name /*String*/, annotations /*List[Annotation]*/, tparams /*List[TypeDef]*/,
+      case ConstructorDef(modifiers /*Modifiers*/, annotations /*List[Annotation]*/, tparams /*List[TypeDef]*/,
                           params /*List[ValDef]*/, body /*Block*/, isDestructor /*Boolean*/) =>
         val sizes = ASTS(annotations) :: ASTS(tparams) :: ASTS(params) :: ASTS(body :: Nil) :: HNil
         (annotations ++ tparams ++ params :+ body, asts => {
           val newAnnots :: newTParams :: newParams :: List(newBody) :: HNil = splits(asts, sizes)
-          ConstructorDef(modifiers, name, newAnnots, newTParams, newParams, newBody, isDestructor).fromAST(ast)
+          ConstructorDef(modifiers, newAnnots, newTParams, newParams, newBody, isDestructor).fromAST(ast)
         })
 
       case FunctionDef(modifiers /*Modifiers*/, name /*String*/, annotations /*List[Annotation]*/, tparams /*List[TypeDef]*/,
@@ -178,7 +179,14 @@ object Operators {
         val sizes = ASTS(annotations) :: ASTS(tpe :: Nil) :: ASTS(rhs :: Nil) :: HNil
         (annotations :+ tpe :+ rhs, asts => {
           val newAnnots :: List(newTpe) :: List(newRhs) :: HNil = splits(asts, sizes)
-          ValDef(modifiers, name, annotations, tpe, rhs, varArgs).fromAST(ast)
+          ValDef(modifiers, name, newAnnots, newTpe, newRhs, varArgs).fromAST(ast)
+        })
+
+      case ExtractionValDef(modifiers /*Modifiers*/, pattern /*Expr*/, annotations /*List[Annotation]*/, rhs /*Expr*/) =>
+        val sizes = ASTS(pattern :: Nil) :: ASTS(annotations) :: ASTS(rhs :: Nil) :: HNil
+        ((pattern +: annotations) :+ rhs, asts => {
+          val List(newPattern) :: newAnnotations :: List(newRhs) :: HNil = splits(asts, sizes)
+          ExtractionValDef(modifiers, newPattern, newAnnotations, newRhs).fromAST(ast)
         })
 
       case Initializer(isStatic /*Boolean*/, annotations /*List[Annotation]*/, body /*Block*/) =>
@@ -218,34 +226,15 @@ object Operators {
       case NamedStatement(name /*String*/, statement /*Statement*/) =>
         (statement :: Nil, asts => NamedStatement(name, asts(0).asInstanceOf[Statement]).fromAST(ast))
 
-      case Switch(selector /*Expr*/, entries /*List[(Expr, Block)]*/) =>
-        val (matchers, bodies) = entries.unzip
-        val sizes = ASTS(selector :: Nil) :: ASTS(matchers) :: ASTS(bodies) :: HNil
-        ((selector +: matchers) ++ bodies, asts => {
-          val List(newSelector) :: newMatchers :: newBodies :: HNil = splits(asts, sizes)
-          Switch(newSelector, newMatchers zip newBodies).fromAST(ast)
-        })
-
       case Break(target /*Option[String]*/) => (Nil, asts => ast)
 
       case Continue(target /*Option[String]*/) => (Nil, asts => ast)
-
-      case If(condition /*Expr*/, thenStatement /*Statement*/, elseStatement /*Statement*/) =>
-        (condition :: thenStatement :: elseStatement :: Nil,
-          asts => If(asts(0).asInstanceOf[Expr], asts(1).asInstanceOf[Statement], asts(2).asInstanceOf[Statement]).fromAST(ast))
 
       case While(condition /*Expr*/, body /*Statement*/) =>
         (condition :: body :: Nil, asts => While(asts(0).asInstanceOf[Expr], asts(1).asInstanceOf[Statement]).fromAST(ast))
 
       case Do(condition /*Expr*/, body /*Statement*/) =>
         (condition :: body :: Nil, asts => Do(asts(0).asInstanceOf[Expr], asts(1).asInstanceOf[Statement]).fromAST(ast))
-
-      case Foreach(vals /*List[ValDef]*/, iterable /*Expr*/, body /*Statement*/) =>
-        val sizes = ASTS(vals) :: ASTS(iterable :: Nil) :: ASTS(body :: Nil) :: HNil
-        (vals :+ iterable :+ body, asts => {
-          val newVals :: List(newIterable) :: List(newBody) :: HNil = splits(asts, sizes)
-          Foreach(newVals, newIterable, newBody).fromAST(ast)
-        })
 
       case For(vals /*List[ValDef]*/, inits /*List[Expr]*/, condition /*Expr*/, updates /*List[Expr]*/, body /*Statement*/) =>
         val sizes = ASTS(vals) :: ASTS(inits) :: ASTS(condition :: Nil) :: ASTS(updates) :: ASTS(body :: Nil) :: HNil
@@ -254,19 +243,8 @@ object Operators {
           For(newVals, newInits, newCond, newUpdates, newBody).fromAST(ast)
         })
 
-      case Throw(expr /*Expr*/) =>
-        (expr :: Nil, asts => Throw(asts(0).asInstanceOf[Expr]).fromAST(ast))
-
       case Synchronize(lock /*Expr*/, body /*Statement*/) =>
         (lock :: body :: Nil, asts => Synchronize(asts(0).asInstanceOf[Expr], asts(1).asInstanceOf[Statement]).fromAST(ast))
-
-      case Try(tryBlock /*Block*/, catchs /*List[(ValDef, Block)]*/, finallyBlock /*Block*/) =>
-        val (exceptions, bodies) = catchs.unzip
-        val sizes = ASTS(tryBlock :: Nil) :: ASTS(exceptions) :: ASTS(bodies) :: ASTS(finallyBlock :: Nil) :: HNil
-        ((tryBlock +: exceptions) ++ (bodies :+ finallyBlock), asts => {
-          val List(newTry) :: newExceptions :: newBodies :: List(newFinally) :: HNil = splits(asts, sizes)
-          Try(newTry, newExceptions zip newBodies, newFinally).fromAST(ast)
-        })
 
       // -- Types ---------------
 
@@ -280,6 +258,9 @@ object Operators {
       case ArrayType(base /*Type*/) =>
         (base :: Nil, asts => ArrayType(asts(0).asInstanceOf[Type]).fromAST(ast))
 
+      case FunctionType(from /*List[Type]*/, to /*Type*/) =>
+        (from :+ to, asts => FunctionType(asts.init.map(_.asInstanceOf[Type]), asts.last.asInstanceOf[Type]).fromAST(ast))
+
       case WildcardType(subType /*Type*/, superType /*Type*/) =>
         (subType :: superType :: Nil, asts => WildcardType(asts(0).asInstanceOf[Type], asts(1).asInstanceOf[Type]).fromAST(ast))
 
@@ -288,6 +269,13 @@ object Operators {
       case special @ (AnyType | BottomType) => (Nil, asts => ast)
 
       case TypeHint(hint /*String*/) => (Nil, asts => ast)
+
+      case ComplexType(parents /*List[Type]*/, definitions /*List[Definition]*/, guard /*Expr*/) =>
+        val sizes = ASTS(parents) :: ASTS(definitions) :: ASTS(guard :: Nil) :: HNil
+        (parents ++ definitions :+ guard, asts => {
+          val newParents :: newDefinitions :: List(newGuard) :: HNil = splits(asts, sizes)
+          ComplexType(newParents, newDefinitions, newGuard).fromAST(ast)
+        })
 
       // -- Expressions ---------
 
@@ -310,11 +298,11 @@ object Operators {
           FunctionCall(newReceiver, newTParams, newArgs).fromAST(ast)
         })
 
-      case ConstructorCall(receiver /*Expr*/, tpe /*ClassType*/, tparams /*List[Type]*/, args /*List[Expr]*/, body /*List[Definition]*/) =>
-        val sizes = ASTS(receiver :: Nil) :: ASTS(tpe :: Nil) :: ASTS(tparams) :: ASTS(args) :: ASTS(body) :: HNil
-        ((receiver :: tpe :: tparams) ++ args ++ body, asts => {
-          val List(newReceiver) :: List(newTpe) :: newTParams :: newArgs :: newBody :: HNil = splits(asts, sizes)
-          ConstructorCall(newReceiver, newTpe, newTParams, newArgs, newBody).fromAST(ast)
+      case ConstructorCall(tpe /*ClassType*/, args /*List[Expr]*/, body /*List[Definition]*/) =>
+        val sizes = ASTS(tpe :: Nil) :: ASTS(args) :: ASTS(body) :: HNil
+        ((tpe +: args) ++ body, asts => {
+          val List(newTpe) :: newArgs :: newBody :: HNil = splits(asts, sizes)
+          ConstructorCall(newTpe, newArgs, newBody).fromAST(ast)
         })
 
       case ArrayAccess(array /*Expr*/, index /*Expr*/) =>
@@ -361,11 +349,11 @@ object Operators {
 
       case special @ (NullLiteral | VoidLiteral) => (Nil, asts => ast)
 
-      case This(tpe /*Type*/) =>
-        (tpe :: Nil, asts => This(asts(0).asInstanceOf[Type]).fromAST(ast))
+      case This(qualifier /*Expr*/) =>
+        (qualifier :: Nil, asts => This(asts(0).asInstanceOf[Expr]).fromAST(ast))
 
-      case Super(tpe /*Type*/) =>
-        (tpe :: Nil, asts => Super(asts(0).asInstanceOf[Type]).fromAST(ast))
+      case Super(qualifier /*Expr*/) =>
+        (qualifier :: Nil, asts => Super(asts(0).asInstanceOf[Expr]).fromAST(ast))
 
       case Annotation(name /*String*/, params /*Map[String, Expr]*/) =>
         val (names, expressions) = params.toList.unzip
@@ -379,6 +367,41 @@ object Operators {
         })
 
       case Wildcard => (Nil, asts => ast)
+
+      case If(condition /*Expr*/, thenStatement /*Statement*/, elseStatement /*Statement*/) =>
+        (condition :: thenStatement :: elseStatement :: Nil,
+          asts => If(asts(0).asInstanceOf[Expr], asts(1).asInstanceOf[Statement], asts(2).asInstanceOf[Statement]).fromAST(ast))
+
+      case Switch(selector /*Expr*/, entries /*List[(Expr, Block)]*/) =>
+        val (matchers, bodies) = entries.unzip
+        val sizes = ASTS(selector :: Nil) :: ASTS(matchers) :: ASTS(bodies) :: HNil
+        ((selector +: matchers) ++ bodies, asts => {
+          val List(newSelector) :: newMatchers :: newBodies :: HNil = splits(asts, sizes)
+          Switch(newSelector, newMatchers zip newBodies).fromAST(ast)
+        })
+
+      case Foreach(vals /*List[ValDef]*/, iterable /*Expr*/, body /*Statement*/, generator /*Boolean*/) =>
+        val sizes = ASTS(vals) :: ASTS(iterable :: Nil) :: ASTS(body :: Nil) :: HNil
+        (vals :+ iterable :+ body, asts => {
+          val newVals :: List(newIterable) :: List(newBody) :: HNil = splits(asts, sizes)
+          Foreach(newVals, newIterable, newBody, generator).fromAST(ast)
+        })
+
+      case Throw(expr /*Expr*/) =>
+        (expr :: Nil, asts => Throw(asts(0).asInstanceOf[Expr]).fromAST(ast))
+
+      case Try(tryBlock /*Block*/, catchs /*List[(ValDef, Block)]*/, finallyBlock /*Block*/) =>
+        val (exceptions, bodies) = catchs.unzip
+        val sizes = ASTS(tryBlock :: Nil) :: ASTS(exceptions) :: ASTS(bodies) :: ASTS(finallyBlock :: Nil) :: HNil
+        ((tryBlock +: exceptions) ++ (bodies :+ finallyBlock), asts => {
+          val List(newTry) :: newExceptions :: newBodies :: List(newFinally) :: HNil = splits(asts, sizes)
+          Try(newTry, newExceptions zip newBodies, newFinally).fromAST(ast)
+        })
+
+      case Guarded(expr /*Expr*/, condition /*Expr*/) =>
+        (expr :: condition :: Nil, asts => Guarded(asts(0).asInstanceOf[Expr], asts(1).asInstanceOf[Expr]).fromAST(ast))
+
+      case Bind(name /*String*/, expr /*Expr*/) => (expr :: Nil, asts => Bind(name, asts(0).asInstanceOf[Expr]).fromAST(ast))
 
       case NoDef | NoType | NoExpr | NoStmt => (Nil, asts => ast)
     }

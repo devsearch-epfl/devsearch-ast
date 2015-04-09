@@ -21,11 +21,11 @@ class JavaParserTest extends FlatSpec with Matchers {
       }
     """)
 
-    assert(JavaParser.parse(source) == PackageDef(Names.default, Nil, Nil, List(
+    assert(JavaParser.parse(source) == PackageDef(Names.DEFAULT, Nil, Nil, List(
       ClassDef(NoModifiers, "ClassWithAConstructor", Nil, Nil, Nil, List(
-        ConstructorDef(PROTECTED, "ClassWithAConstructor",
+        ConstructorDef(PROTECTED,
           List("This", "AndThat", "AndWhatElse").map { s =>
-            Annotation(Names.THROWS_ANNOTATION, Map(Names.default -> Ident(s)))
+            Annotation(Names.THROWS_ANNOTATION, Map(Names.DEFAULT -> Ident(s)))
           }, Nil, List(
             ValDef(NoModifiers, "a", Nil, PrimitiveTypes.Int, Empty[Expr]),
             ValDef(NoModifiers, "b", Nil, PrimitiveTypes.String, Empty[Expr])
@@ -86,7 +86,7 @@ class JavaParserTest extends FlatSpec with Matchers {
       }
     """)
 
-    assert(JavaParser.parse(source) ==  PackageDef(Names.default,List(),List(),List(
+    assert(JavaParser.parse(source) ==  PackageDef(Names.DEFAULT,List(),List(),List(
       ClassDef(NoModifiers,"Test",List(),List(),List(),List(
         FunctionDef(PUBLIC,"toto",List(),List(),List(ValDef(NoModifiers,"i",List(),PrimitiveTypes.Int,NoExpr,false)),PrimitiveTypes.Void,Block(List(
           Switch(Ident("i"),List(
@@ -99,5 +99,20 @@ class JavaParserTest extends FlatSpec with Matchers {
             (SimpleLiteral(PrimitiveTypes.Int,"3"),Block(List(
               FunctionCall(FieldAccess(FieldAccess(Ident("System"),"out",List()),"println",List()),List(),List(SimpleLiteral(PrimitiveTypes.String,"3")))))),
             (NoExpr,NoStmt))))))),ClassSort))))
+  }
+
+  it should "work without enclosing class" in {
+    val source = new ContentsSource("Something.java", """
+      public void doSomething(int i) {
+        return i + 2;
+      }
+    """)
+
+    assert(JavaParser.parse(source) == PackageDef(Names.DEFAULT,List(),List(),List(
+      ClassDef(NoModifiers,Names.DEFAULT,List(),List(),List(),List(
+        FunctionDef(PUBLIC,"doSomething",List(),List(),
+          List(ValDef(NoModifiers,"i",List(),PrimitiveTypes.Int,NoExpr,false)),PrimitiveTypes.Void,
+          Block(List(Return(BinaryOp(Ident("i"),"+",SimpleLiteral(PrimitiveTypes.Int,"2"))))))
+      ),ClassSort))))
   }
 }
