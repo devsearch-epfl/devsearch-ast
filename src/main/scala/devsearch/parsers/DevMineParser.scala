@@ -75,9 +75,9 @@ abstract class DevMineParser(parserPath: String) extends Parser {
   }
 
   private def extractName(js: JsValue): String = js match {
-    case JsObject(fields) => fields.get("name").map(extractName(_)) getOrElse Names.default
+    case JsObject(fields) => fields.get("name").map(extractName(_)) getOrElse Names.DEFAULT
     case JsString(value) => value
-    case _ => Names.default
+    case _ => Names.DEFAULT
   }
 
   private def extractDoc(js: JsObject): String = 
@@ -149,11 +149,13 @@ abstract class DevMineParser(parserPath: String) extends Parser {
 
         tpe match {
           case Some(cd: ClassDef) => List(cd,
-            TypeDef(name, Nil, Nil, List(
+            TypeDef(NoModifiers, name, Nil, Nil, Nil, List(
               ClassType(Empty[Expr], cd.name, Nil, Nil).setPos(pos)
             )).setPos(pos).setComment(doc)
           )
-          case Some(tpe: Type) => List(TypeDef(name, Nil, Nil, List(tpe)).setPos(pos).setComment(doc))
+          case Some(tpe: Type) => List(
+            TypeDef(NoModifiers, name, Nil, Nil, Nil, List(tpe)).setPos(pos).setComment(doc)
+          )
           case _ => Nil
         }
       }
@@ -186,17 +188,17 @@ abstract class DevMineParser(parserPath: String) extends Parser {
       val functions = fields.get("functions").asArray.as((o: JsObject) => extractFunction(o, pos)).distinct
 
       def extractSuperInterface(o: JsObject, pos: Position): ClassType = {
-        val name = o.fields.get("interface_name").as((s: JsString) => s.value).headOption getOrElse Names.default
+        val name = o.fields.get("interface_name").as((s: JsString) => s.value).headOption getOrElse Names.DEFAULT
         ClassType(extractNamespace(o, pos), name, Nil, Nil).setPos(pos)
       }
 
       def extractSuperClass(o: JsObject, pos: Position): ClassType = {
-        val name = o.fields.get("class_name").as((s: JsString) => s.value).headOption getOrElse Names.default
+        val name = o.fields.get("class_name").as((s: JsString) => s.value).headOption getOrElse Names.DEFAULT
         ClassType(extractNamespace(o, pos), name, Nil, Nil).setPos(pos)
       }
 
       def extractSuperTrait(o: JsObject, pos: Position): ClassType = {
-        val name = o.fields.get("trait_name").as((s: JsString) => s.value).headOption getOrElse Names.default
+        val name = o.fields.get("trait_name").as((s: JsString) => s.value).headOption getOrElse Names.DEFAULT
         ClassType(extractNamespace(o, pos), name, Nil, Nil).setPos(pos)
       }
 
@@ -233,12 +235,11 @@ abstract class DevMineParser(parserPath: String) extends Parser {
 
         def extractConstructor(o: JsObject, pos: Position) = {
           val doc = extractDoc(o)
-          val name = extractName(o)
           val params = o.fields.get("parameters").asArray.as((o: JsObject) => extractField(o, pos))
           val body = Block(o.fields.get("body").asArray.asList((o: JsObject) => extractStmts(o, pos)))
           val modifiers = extractVisibility(o)
           val loc = o.fields.get("loc").as((n: JsNumber) => n.value.toInt).headOption getOrElse 0
-          ConstructorDef(modifiers, name, Nil, Nil, params, body)
+          ConstructorDef(modifiers, Nil, Nil, params, body)
             .setPos(LineRangePosition(pos.source, pos.line, pos.line + loc)).setComment(doc)
         }
 
@@ -272,7 +273,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
 
       val traits = fields.get("traits").asArray.as((o: JsObject) => extractTrait(o, pos))
 
-      val name = fields.get("path").as((s: JsString) => s.value).map(s => s.split("/").mkString(".")).headOption getOrElse Names.default
+      val name = fields.get("path").as((s: JsString) => s.value).map(s => s.split("/").mkString(".")).headOption getOrElse Names.DEFAULT
 
       PackageDef(name, Nil, imports, typeDefs ++ structs ++ constants ++ variables ++ functions ++ interfaces ++ classes ++ traits).setPos(pos)
 
@@ -305,10 +306,10 @@ abstract class DevMineParser(parserPath: String) extends Parser {
 
       def extractFunction(js: JsValue, pos: Position): (Expr, String) = js match {
         case obj @ JsObject(fields) =>
-          val name = fields.get("function_name").as((s: JsString) => s.value).headOption getOrElse Names.default
+          val name = fields.get("function_name").as((s: JsString) => s.value).headOption getOrElse Names.DEFAULT
           extractNamespace(obj, pos) -> name
         case JsString(name) => Empty[Expr] -> name
-        case _ => Empty[Expr] -> Names.default
+        case _ => Empty[Expr] -> Names.DEFAULT
       }
 
       val extracted = fields.get("expression_name").as((s: JsString) => s.value).headOption match {
@@ -342,7 +343,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
         case Some(ConstructorCallExprName) => obj.getFields("function", "arguments") match {
           case Seq(function, JsArray(arguments)) =>
             val (receiver, name) = extractFunction(function, nextPos)
-            ConstructorCall(receiver, ClassType(Empty[Expr], name, Nil, Nil), Nil, arguments.toList.map(extractExpr(_, nextPos)), Nil)
+            ConstructorCall(ClassType(receiver, name, Nil, Nil).setPos(nextPos), arguments.toList.map(extractExpr(_, nextPos)), Nil)
           case _ => Empty[Expr]
         }
 

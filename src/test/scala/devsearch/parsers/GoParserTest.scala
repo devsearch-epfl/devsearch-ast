@@ -48,7 +48,7 @@ class GoParserTest extends FlatSpec with Matchers {
     val ast = GoParser.parse(source)
     val name = ast match {
       case p : PackageDef => p.name
-      case _ => Names.default
+      case _ => Names.DEFAULT
     }
 
     assert(ast == PackageDef(name,List(),
@@ -99,7 +99,7 @@ class GoParserTest extends FlatSpec with Matchers {
     val ast = GoParser.parse(source)
     val name = ast match {
       case p : PackageDef => p.name
-      case _ => Names.default
+      case _ => Names.DEFAULT
     }
 
     assert(ast == PackageDef(name,List(),
@@ -158,7 +158,7 @@ class GoParserTest extends FlatSpec with Matchers {
     val ast = GoParser.parse(source)
     val name = ast match {
       case p : PackageDef => p.name
-      case _ => Names.default
+      case _ => Names.DEFAULT
     }
 
     assert(ast == PackageDef(name,List(),List(Import("fmt",false,false)),List(

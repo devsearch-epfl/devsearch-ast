@@ -21,14 +21,18 @@ trait Source extends Serializable {
     indexes(0, Nil).reverse
   }
 
-  def position(offset: Int) = {
+  def offsetCoords(offset: Int) = {
     def extractPosition(offset: Int, line: Int, sizes: List[Int]): (Int, Int) = sizes match {
       case lineSize :: xs =>
         if (offset < lineSize) (line, offset)
         else extractPosition(offset - lineSize, line + 1, xs)
       case _ => (offset, line)
     }
-    val (line, col) = extractPosition(offset, 0, lineSizes)
+    extractPosition(offset, 0, lineSizes)
+  }
+
+  def position(offset: Int) = {
+    val (line, col) = offsetCoords(offset)
     SimplePosition(this, line, col)
   }
 

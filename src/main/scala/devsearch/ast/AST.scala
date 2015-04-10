@@ -16,6 +16,9 @@ sealed trait AST extends Positional with Commentable with java.io.Serializable {
   /** Collects all matches over complete AST, @see [[Operators.collect]] */
   def collect[T](matcher: AST => Set[T]): Set[T] = Operators.collect(matcher)(this)
 
+  /** Alias for [[postMap]] */
+  def transform(f: AST => Option[AST], applyRec: Boolean = false): AST = postMap(f, applyRec)
+
   /** Post-transform on AST, @see [[Operators.postMap]] */
   def postMap(f: AST => Option[AST], applyRec: Boolean = false): AST = Operators.postMap(f, applyRec)(this)
 }
@@ -29,6 +32,7 @@ sealed trait Unassignable extends AST {
   override def setComment(comment: String) = this
 }
 
+
 // -- Definitions ---------------------------------------------------------------------
 
 /**
@@ -37,10 +41,7 @@ sealed trait Unassignable extends AST {
  * We extend [[Statement]] here since in many languages, definitions (such as [[ValDef]], for example) can take
  * place in statement positions.
  */
-sealed trait Definition extends Statement {
-  val name: String
-  val annotations: List[Annotation]
-}
+sealed trait Definition extends Statement
 
 /**
  * Package definition
@@ -58,8 +59,13 @@ case class PackageDef(name: String, annotations: List[Annotation], imports: List
  * - `type A`
  * - `def test[A]` where `A` is a type parameter of `test`
  */
-case class TypeDef(name: String, annotations: List[Annotation], lowerBounds: List[Type], superBounds: List[Type]) extends Definition
+case class TypeDef(modifiers: Modifiers, name: String, annotations: List[Annotation], tparams: List[TypeDef],
+  lowerBounds: List[Type], superBounds: List[Type]) extends Definition
 
+/**
+ * We use [[ClassDef]] to model all kinds of classes/traits/interfaces/structs/..., so we use a sort field to
+ * differentiate them.
+ */
 sealed trait StructuralSort extends java.io.Serializable
 case object ClassSort extends StructuralSort
 case object TraitSort extends StructuralSort
@@ -100,7 +106,7 @@ case class AnnotationDef(modifiers: Modifiers, name: String, annotations: List[A
  *
  * The definition of a class (or other type) constructor. Very close to a [[FunctionDef]], except there is no return type.
  */
-case class ConstructorDef(modifiers: Modifiers, name: String, annotations: List[Annotation], tparams: List[TypeDef], params: List[ValDef], body: Block, isDestructor: Boolean = false) extends Definition
+case class ConstructorDef(modifiers: Modifiers, annotations: List[Annotation], tparams: List[TypeDef], params: List[ValDef], body: Block, isDestructor: Boolean = false) extends Definition
 
 /**
  * Function definition
@@ -117,18 +123,25 @@ case class FunctionDef(modifiers: Modifiers, name: String, annotations: List[Ann
  * A few examples:
  * - `val test = 1`
  * - `int a = 0;` (or also `int a;`
- * - `a = 1`
  */
 case class ValDef(modifiers: Modifiers, name: String, annotations: List[Annotation], tpe: Type, rhs: Expr, varArgs: Boolean = false) extends Definition
+
+/**
+ * Extraction value definition
+ *
+ * Some languages enable value definitions where the right hand side term is deconstructed into multiple defining values (such as unapply assignments in Scala).
+ * These cases are stored in this case class, and can also take the form of tuple extraction.
+ */
+case class ExtractionValDef(modifiers: Modifiers, pattern: Expr, annotations: List[Annotation], rhs: Expr) extends Definition
 
 /**
  * Initializer statement
  *
  * A subtle definition mostly useful to catch corner cases. An example, in java, is the `static { ... }` block that can be found in singleton classes. We type this as a definition since it is clearly a statement otherwise.
+ * Also, all initialization statements in Scala class blocks that would normally be placed in a constructor in Java will be found in an `Initializer` block.
  */
-case class Initializer(isStatic: Boolean, annotations: List[Annotation], body: Block) extends Definition {
-  val name = Names.default
-}
+case class Initializer(isStatic: Boolean, annotations: List[Annotation], body: Block) extends Definition
+
 
 // -- Statements ----------------------------------------------------------------------
 
@@ -138,10 +151,10 @@ sealed trait Statement extends AST
 case class Import(name: String, asterisk: Boolean, static: Boolean) extends Statement
 
 /** This call for reference to other constructors */
-case class ThisCall(tpe: Type, tparams: List[Type], args: List[Expr]) extends Statement
+case class ThisCall(qualifier: Expr, tparams: List[Type], args: List[Expr]) extends Statement
 
 /** Super call for reference to super constructor */
-case class SuperCall(tpe: Type, tparams: List[Type], args: List[Expr]) extends Statement
+case class SuperCall(qualifier: Expr, tparams: List[Type], args: List[Expr]) extends Statement
 
 /** Assertion statement that will throw an exception if the condition doesn't hold at runtime */
 case class Assert(condition: Expr, message: Expr) extends Statement
@@ -152,7 +165,7 @@ case class Assert(condition: Expr, message: Expr) extends Statement
  * We model code blocks as a list of [[Statement]]. Since expressions and definitions are also satetements
  * in our language, this is general enough for any block definition.
  */
-case class Block(statements: List[Statement]) extends Statement
+case class Block(statements: List[Statement]) extends Statement with Expr
 
 /** Return statement */
 case class Return(value: Expr) extends Statement
@@ -164,37 +177,17 @@ case class Return(value: Expr) extends Statement
  */
 case class NamedStatement(name: String, statement: Statement) extends Statement
 
-/**
- * Switch expression
- *
- * A switch-case expression where a selector is matched against expressions associated to code-blocks.
- * We can easily model java switch statements as well as scala match-case expressions with this construct.
- */
-case class Switch(selector: Expr, entries: List[(Expr, Block)]) extends Statement
-
 /** Loop break statement that can provide a label for go-to functionality */
 case class Break(target: Option[String]) extends Statement
 
 /** Loop continue statement that can also provide a label for go-to functionality */
 case class Continue(target: Option[String]) extends Statement
 
-/** Basic if expression */
-case class If(condition: Expr, thenStatement: Statement, elseStatement: Statement) extends Statement
-
 /** While loop */
 case class While(condition: Expr, body: Statement) extends Statement
 
 /** Do-while loop */
 case class Do(condition: Expr, body: Statement) extends Statement
-
-/**
- * Foreach loop
- *
- * Typically for languages that provide a `for ... in ...` kind of construct. Not to be confused with the [[For]]
- * construct that provides guarded iteration. Since certain languages provide both constructs, we provide support
- * for both as well.
- */
-case class Foreach(vals: List[ValDef], iterable: Expr, body: Statement) extends Statement
 
 /**
  * For loop
@@ -204,9 +197,6 @@ case class Foreach(vals: List[ValDef], iterable: Expr, body: Statement) extends 
  */
 case class For(vals: List[ValDef], inits: List[Expr], condition: Expr, updates: List[Expr], body: Statement) extends Statement
 
-/** Throw expression, as in `throw new RuntimeException("Haha you failed!")` */
-case class Throw(expr: Expr) extends Statement
-
 /**
  * Thread locking construct
  *
@@ -215,8 +205,6 @@ case class Throw(expr: Expr) extends Statement
  */
 case class Synchronize(lock: Expr, body: Statement) extends Statement
 
-/** A basic try-catch-finally block */
-case class Try(tryBlock: Block, catchs: List[(ValDef, Block)], finallyBlock: Block) extends Statement
 
 // -- Types ---------------------------------------------------------------------------
 
@@ -262,6 +250,15 @@ object PrimitiveTypes {
 case class ArrayType(base: Type) extends Type
 
 /**
+ * Function type
+ *
+ * Certain functional languages offer functions as first-class members, so it makes sense to have
+ * a notion of function types in our pseudo type trees. For example,
+ * - (A,B) => C in Scala
+ */
+case class FunctionType(from: List[Type], to: Type) extends Type
+
+/**
  * Wildcard type
  *
  * Quite a few languages provide some sort of unknown type with bounds on it. For example:
@@ -297,6 +294,10 @@ case object BottomType extends Type with Unassignable
  */
 case class TypeHint(hint: String) extends Type
 
+/** Complex type that encompasses refinement types, sum types, ... */
+case class ComplexType(parents: List[Type], definitions: List[Definition], expr: Expr) extends Type
+
+
 // -- Expressions ---------------------------------------------------------------------
 
 /**
@@ -309,6 +310,9 @@ sealed trait Expr extends Statement
 
 /** Identifier as in reference to local variable */
 case class Ident(name: String) extends Expr
+
+/** Binding from an identifier to an expression, like i @ _ in Scala */
+case class Bind(name: String, expr: Expr) extends Expr
 
 /**
  * Unary operation
@@ -347,7 +351,7 @@ case class TernaryOp(cond: Expr, thenn: Expr, elze: Expr) extends Expr
 case class FunctionCall(receiver: Expr, tparams: List[Type], args: List[Expr]) extends Expr
 
 /** Constructor call (or object creation) */
-case class ConstructorCall(receiver: Expr, tpe: ClassType, tparams: List[Type], args: List[Expr], body: List[Definition]) extends Expr
+case class ConstructorCall(tpe: ClassType, args: List[Expr], body: List[Definition]) extends Expr
 
 /** Array index access, in java, `a[i]`. */
 case class ArrayAccess(array: Expr, index: Expr) extends Expr
@@ -366,6 +370,7 @@ case class ArrayLiteral(tpe: Type, annotations: List[Annotation], dimensions: Li
  * Pair or sequence literal
  *
  * Used for multiple returns, language supported pairs, sequences, basically anything enclosed between parentheses and with commas ;)
+ * I also encode alternatives here (like A | B in Scala) because this is such a rare language feature.
  */
 case class MultiLiteral(elements: List[Expr]) extends Expr
 
@@ -416,10 +421,10 @@ case object NullLiteral extends Expr with Unassignable
 case object VoidLiteral extends Expr with Unassignable
 
 /** This expression, can be specialized with a type */
-case class This(tpe: Type) extends Expr
+case class This(qualifier: Expr) extends Expr
 
 /** Super expression, can be specialized with a type */
-case class Super(tpe: Type) extends Expr
+case class Super(qualifier: Expr) extends Expr
 
 /**
  * Annotation expression
@@ -446,6 +451,53 @@ case class FunctionLiteral(params: List[ValDef], tpe: Type, body: Statement) ext
  */
 case object Wildcard extends Expr with Unassignable
 
+/**
+ * Guarded expression
+ *
+ * Languages that support match-case expressions, or foreach statements that filter during the foreach
+ * encode these "guards" in guarded expressions. For example, in Scala we have
+ * - `case a if a > 0 => `
+ * - `for (a <- nums if a < 2)`
+ */
+case class Guarded(expr: Expr, condition: Expr) extends Expr
+
+/**
+ * Basic if expression
+ *
+ * This is actually very close to a [[TernaryOp]], but the syntax is so different that I decided to keep them
+ * separate. Maybe the two trees will be unified sometime.
+ */
+case class If(condition: Expr, thenStatement: Statement, elseStatement: Statement) extends Expr
+
+/**
+ * Switch expression
+ *
+ * A switch-case expression where a selector is matched against expressions associated to code-blocks.
+ * We can easily model java switch statements as well as scala match-case expressions with this construct.
+ */
+case class Switch(selector: Expr, entries: List[(Expr, Block)]) extends Expr
+
+/**
+ * Foreach loop
+ *
+ * Typically for languages that provide a `for ... in ...` kind of construct. Not to be confused with the [[For]]
+ * construct that provides guarded iteration. Since certain languages provide both constructs, we provide support
+ * for both as well.
+ */
+case class Foreach(vals: List[ValDef], iterable: Expr, body: Statement, generator: Boolean = false) extends Expr
+
+/** Throw expression, as in `throw new RuntimeException("Haha you failed!")` */
+case class Throw(expr: Expr) extends Expr
+
+/**
+ * A basic try-catch-finally block
+ *
+ * The catch block matchers are kept completely generic since the formats can widely vary
+ * from one language to the next.
+ */
+case class Try(tryBlock: Block, catchs: List[(AST, Block)], finallyBlock: Block) extends Expr
+
+
 // -- Helpers -------------------------------------------------------------------------
 
 /**
@@ -469,11 +521,8 @@ sealed class Modifiers(private val mask: Int) extends java.io.Serializable {
   def isStatic       = (this & Modifiers.STATIC)       != Modifiers.NoModifiers
   def isFinal        = (this & Modifiers.FINAL)        != Modifiers.NoModifiers
   def isSynchronized = (this & Modifiers.SYNCHRONIZED) != Modifiers.NoModifiers
-  def isVolatile     = (this & Modifiers.VOLATILE)     != Modifiers.NoModifiers
-  def isTransient    = (this & Modifiers.TRANSIENT)    != Modifiers.NoModifiers
   def isNative       = (this & Modifiers.NATIVE)       != Modifiers.NoModifiers
   def isAbstract     = (this & Modifiers.ABSTRACT)     != Modifiers.NoModifiers
-  def isStrict       = (this & Modifiers.STRICT)       != Modifiers.NoModifiers
 
   override def toString: String = {
     if (this == Modifiers.NoModifiers) "NoModifiers" else {
@@ -483,11 +532,8 @@ sealed class Modifiers(private val mask: Int) extends java.io.Serializable {
       (if (isStatic)       List("STATIC")       else Nil) ++
       (if (isFinal)        List("FINAL")        else Nil) ++
       (if (isSynchronized) List("SYNCHRONIZED") else Nil) ++
-      (if (isVolatile)     List("VOLATILE")     else Nil) ++
-      (if (isTransient)    List("TRANSIENT")    else Nil) ++
       (if (isNative)       List("NATIVE")       else Nil) ++
-      (if (isAbstract)     List("ABSTRACT")     else Nil) ++
-      (if (isStrict)       List("STRICT")       else Nil)
+      (if (isAbstract)     List("ABSTRACT")     else Nil)
     }.mkString(" ")
   }
 }
@@ -502,16 +548,13 @@ object Modifiers {
   object STATIC       extends Modifiers(1 <<  3)
   object FINAL        extends Modifiers(1 <<  4)
   object SYNCHRONIZED extends Modifiers(1 <<  5)
-  object VOLATILE     extends Modifiers(1 <<  6)
-  object TRANSIENT    extends Modifiers(1 <<  7)
-  object NATIVE       extends Modifiers(1 <<  8)
-  object ABSTRACT     extends Modifiers(1 <<  9)
-  object STRICT       extends Modifiers(1 << 10)
+  object NATIVE       extends Modifiers(1 <<  6)
+  object ABSTRACT     extends Modifiers(1 <<  7)
 }
 
 object Names {
-  val default = "$$default"
-  val noop = "$$noop"
+  val DEFAULT = "dft01"
+  val NOOP = "$$noop"
 
   val OVERRIDE_ANNOTATION = "Override"
   val THROWS_ANNOTATION = "throws"
@@ -520,12 +563,7 @@ object Names {
 object Empty {
   sealed class EmptyProvider[T <: AST](val value: T)
 
-  object NoDef extends Definition with Unassignable {
-    val name = Names.default
-    val annotations = Nil
-    override def toString = "NoDef"
-  }
-
+  object NoDef extends Definition with Unassignable { override def toString = "NoDef" }
   implicit val emptyDefProvider = new EmptyProvider[Definition](NoDef)
   implicit val emptyASTProvider = new EmptyProvider[AST](NoDef)
 
