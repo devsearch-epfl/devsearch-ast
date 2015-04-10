@@ -12,6 +12,6 @@ object CodeEater {
    * Eats code and returns distinct features (no duplicates)
    */
   def eat(sc: SparkContext, inputData: RDD[CodeFileData]): RDD[Feature] = {
-    inputData.flatMap(FeatureExtractor.extract)
+    inputData.flatMap(Features)
   }
 }

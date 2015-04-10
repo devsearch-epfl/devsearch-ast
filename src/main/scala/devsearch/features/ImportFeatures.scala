@@ -7,7 +7,7 @@ case class ImportFeature(position: CodeFilePosition, domain: String) extends Fea
 }
 
 object ImportFeatures extends FeatureExtractor {
-  def extract(data: CodeFileData): Traversable[Feature] = data.ast.collect {
+  def extract(data: CodeFileData) = data.ast.collect {
     case i: Import if i.name != Names.DEFAULT => Set(ImportFeature(data.location at i.pos, i.name))
     case _ => Set.empty[ImportFeature]
   }

@@ -7,10 +7,10 @@ abstract class Feature(position: CodeFilePosition) extends java.io.Serializable 
 }
 
 trait FeatureExtractor extends java.io.Serializable {
-  def extract(data: CodeFileData): Traversable[Feature]
+  def extract(data: CodeFileData): TraversableOnce[Feature]
 }
 
-object FeatureExtractor extends java.io.Serializable {
+object Features extends (CodeFileData => TraversableOnce[Feature]) with java.io.Serializable {
 
   lazy val extractors = List(
     ImportFeatures,
@@ -21,7 +21,7 @@ object FeatureExtractor extends java.io.Serializable {
     StructuralFeatures
   )
 
-  def extract(data: CodeFileData) = extractors.flatMap(_.extract(data))
+  def apply(data: CodeFileData) = extractors.flatMap(_.extract(data))
 }
 
 case class CodeFileLocation(user: String, repoName: String, fileName: String) extends java.io.Serializable {
