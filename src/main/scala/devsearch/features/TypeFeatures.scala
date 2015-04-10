@@ -6,7 +6,7 @@ case class TypeReference(position: CodeFilePosition, path: String) extends Featu
   def key: String = "type reference = " + path
 }
 
-object TypeExtractor extends FeatureExtractor {
+object TypeFeatures extends FeatureExtractor {
 
   object ReferenceExtractor {
     def unapply(expr: Expr): Option[String] = expr match {

@@ -3,10 +3,10 @@ package devsearch.features
 import devsearch.utils._
 import org.scalatest._
 
-class TypeExtractorTest extends FlatSpec with CodeProvider {
+class TypeFeaturesTest extends FlatSpec with CodeProvider {
   
   "Type feature extractor" should "work on JavaConcepts.java" in {
-    assert(TypeExtractor.extract(code).toSet == Set(
+    assert(TypeFeatures.extract(code).toSet == Set(
       TypeReference(location at 399, "Cloneable"),
       TypeReference(location at 131, "Cloneable"),
       TypeReference(location at 389, "ByteArrayInputStream"),

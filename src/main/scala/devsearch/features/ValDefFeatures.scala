@@ -7,7 +7,7 @@ case class TypedVariable(position: CodeFilePosition, variableType: String, varia
   def key: String = "variable declaration = " + variableName + ": " + variableType
 }
 
-object ValDefExtractor extends FeatureExtractor {
+object ValDefFeatures extends FeatureExtractor {
 
   def convertTypeToString(tpe: Type): String = {
     // TODO(julien, mateusz): need to integrate as many types as possible, and make current strings more readable

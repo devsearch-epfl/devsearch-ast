@@ -7,7 +7,7 @@ case class InheritanceFeature(position: CodeFilePosition, className: String, sup
   def key: String = "inheritance = " + className + " from " + superClassName
 }
 
-object InheritanceExtractor extends FeatureExtractor {
+object InheritanceFeatures extends FeatureExtractor {
   def extract(data: CodeFileData) = data.ast.collect {
     case cd: ClassDef if cd.name != Names.DEFAULT =>
       cd.superClasses.collect { case ClassType(_, superClass, _, _) if superClass != Names.DEFAULT =>

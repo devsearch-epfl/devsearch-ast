@@ -23,7 +23,7 @@ case class ThrowsException(position: CodeFilePosition, exception: String) extend
   def key: String = "throws = " + exception
 }
 
-object FunDefExtractor extends FeatureExtractor {
+object FunDefFeatures extends FeatureExtractor {
   def extract(data: CodeFileData): Traversable[Feature] = data.ast.collect {
     case fd @ FunctionDef(mods, name, annotations, _, params, _, _) =>
       // extract function name feature

@@ -23,10 +23,12 @@ object CodeEater {
     def eat(sc: SparkContext, inputData: RDD[CodeFileData]): RDD[Feature] = {
         val emptyRDD: RDD[Feature] = sc.emptyRDD[Feature]
         List[FeatureExtractor](
-            ImportExtractor,
-            InheritanceExtractor,
-            ValDefExtractor,
-            FunDefExtractor
+            ImportFeatures,
+            InheritanceFeatures,
+            ValDefFeatures,
+            FunDefFeatures,
+            TypeFeatures,
+            StructuralFeatures
         ).foldLeft(emptyRDD)(
             (acc, extractor) =>
               sc.union(acc, inputData.flatMap(data => extractor.extract(data)).distinct)

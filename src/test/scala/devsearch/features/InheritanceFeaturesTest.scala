@@ -3,9 +3,9 @@ package devsearch.features
 import devsearch.utils._
 import org.scalatest.FlatSpec
 
-class InheritanceExtractorTest extends FlatSpec with CodeProvider {
+class InheritanceFeaturesTest extends FlatSpec with CodeProvider {
   "inheritance extractor" should "extract all class extensions and interface implementations" in {
-    assert(InheritanceExtractor.extract(code).toSet == Set(
+    assert(InheritanceFeatures.extract(code).toSet == Set(
       InheritanceFeature(location at 363, "A", "XXX"),
       InheritanceFeature(location at 185, "Y", "X"),
       InheritanceFeature(location at 399, "XXX", "Serializable"),

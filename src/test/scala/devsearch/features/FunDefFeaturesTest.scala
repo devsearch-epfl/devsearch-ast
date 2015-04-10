@@ -3,9 +3,9 @@ package devsearch.features
 import devsearch.utils._
 import org.scalatest._
 
-class FunDefExtractorTest extends FlatSpec with CodeProvider {
+class FunDefFeaturesTest extends FlatSpec with CodeProvider {
   "function extractor" should "work in JavaConcepts.java" in {
-    assert(FunDefExtractor.extract(code).toSet == Set(
+    assert(FunDefFeatures.extract(code).toSet == Set(
       FunctionName(location at 149, "mm"),
       FunctionName(location at 182, "m"),
       FunctionName(location at 143, "mm"),
