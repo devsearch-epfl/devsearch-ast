@@ -1,21 +1,18 @@
 package devsearch.features
 
-import org.scalatest.{FlatSpec}
+import devsearch.utils._
+import org.scalatest.FlatSpec
 
-class ImportExtractorTest extends FlatSpec {
-    "import extractor" should "extract all imports" in {
-      FeatureTestHelper.withSampleCodeData { sampleCodeData =>
-        val importFeatures = ImportExtractor.extract(sampleCodeData)
+class ImportExtractorTest extends FlatSpec with CodeProvider {
 
-        assert(importFeatures.collect.toSet == Set(
-                ImportFeature(FeatureTestHelper.codeFileLocation, InFilePosition(10, 1), "java.util", true, false),
-                ImportFeature(FeatureTestHelper.codeFileLocation, InFilePosition(6, 1), "com.github.javaparser.ast.CompilationUnit", false, false),
-                ImportFeature(FeatureTestHelper.codeFileLocation, InFilePosition(9, 1), "java.io", true, false),
-                ImportFeature(FeatureTestHelper.codeFileLocation, InFilePosition(5, 1), "japa.parser.ParseException", false, false),
-                ImportFeature(FeatureTestHelper.codeFileLocation, InFilePosition(7, 1), "org.junit.Ignore", false, false),
-                ImportFeature(FeatureTestHelper.codeFileLocation, InFilePosition(3, 1), "com.github.javaparser.JavaParser", false, false)
-            )
-        )
-      }
-    }
+  "import extractor" should "extract all imports" in {
+    assert(ImportExtractor.extract(code).toSet == Set(
+      ImportFeature(location at 10, "java.util"),
+      ImportFeature(location at 6,  "com.github.javaparser.ast.CompilationUnit"),
+      ImportFeature(location at 9,  "java.io"),
+      ImportFeature(location at 5,  "japa.parser.ParseException"),
+      ImportFeature(location at 7,  "org.junit.Ignore"),
+      ImportFeature(location at 3,  "com.github.javaparser.JavaParser")
+    ))
+  }
 }

@@ -178,9 +178,10 @@ abstract class DevMineParser(parserPath: String) extends Parser {
         val body = o.fields.get("body").asArray.flatMap(extractStmts(_, pos))
         val loc = o.fields.get("loc").as((n: JsNumber) => n.value.toInt).headOption getOrElse 0
         // XXX: functions don't have parameters for now...
-        FunctionDef(extractVisibility(o), extractName(o), Nil, Nil, Nil, extractType(o, pos), Block(body))
-          .setPos(LineRangePosition(pos.source, pos.line, pos.line + loc))
+        val position = LineRangePosition(pos.source, pos.line, pos.line + loc)
+        FunctionDef(extractVisibility(o), extractName(o), Nil, Nil, Nil, extractType(o, pos), Block(body).setPos(position))
           .setComment(extractDoc(o))
+          .setPos(position)
       }
 
       // XXX: we only report `distinct` functions since there is a bug in the DevMine parser-go that dupplicates
@@ -236,7 +237,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
         def extractConstructor(o: JsObject, pos: Position) = {
           val doc = extractDoc(o)
           val params = o.fields.get("parameters").asArray.as((o: JsObject) => extractField(o, pos))
-          val body = Block(o.fields.get("body").asArray.asList((o: JsObject) => extractStmts(o, pos)))
+          val body = Block(o.fields.get("body").asArray.asList((o: JsObject) => extractStmts(o, pos))).setPos(pos)
           val modifiers = extractVisibility(o)
           val loc = o.fields.get("loc").as((n: JsNumber) => n.value.toInt).headOption getOrElse 0
           ConstructorDef(modifiers, Nil, Nil, params, body)
@@ -336,7 +337,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
         case Some(CallExprName) => obj.getFields("function", "arguments") match {
           case Seq(function, JsArray(arguments)) =>
             val (receiver, name) = extractFunction(function, nextPos)
-            FunctionCall(FieldAccess(receiver, name, Nil), Nil, arguments.toList.map(extractExpr(_, nextPos)))
+            FunctionCall(FieldAccess(receiver, name, Nil).setPos(nextPos), Nil, arguments.toList.map(extractExpr(_, nextPos)))
           case _ => Empty[Expr]
         }
 
@@ -369,7 +370,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
         }
 
         case Some(FuncLitName) =>
-          val body = Block(fields.get("body").asArray.flatMap(extractStmts(_, nextPos)))
+          val body = Block(fields.get("body").asArray.flatMap(extractStmts(_, nextPos))).setPos(nextPos)
           val tpe = extractType(obj, nextPos)
           // XXX: function's don't have arguments for now...
           FunctionLiteral(Nil, tpe, body)
@@ -443,8 +444,8 @@ abstract class DevMineParser(parserPath: String) extends Parser {
         case Some(IfStmtName) =>
           val init = fields.get("initialization").toList.flatMap(extractStmts(_, nextPos))
           val cond = fields.get("condition").map(extractExpr(_, nextPos)) getOrElse Empty[Expr]
-          val thenn = Block(fields.get("body").asArray.flatMap(extractStmts(_, nextPos)))
-          val elze = Block(fields.get("else").asArray.flatMap(extractStmts(_, nextPos)))
+          val thenn = Block(fields.get("body").asArray.flatMap(extractStmts(_, nextPos))).setPos(nextPos)
+          val elze = Block(fields.get("else").asArray.flatMap(extractStmts(_, nextPos))).setPos(nextPos)
           init :+ If(cond, thenn, elze)
 
         case Some(SwitchStmtName) =>
@@ -452,11 +453,11 @@ abstract class DevMineParser(parserPath: String) extends Parser {
           val cond = fields.get("condition").map(extractExpr(_, nextPos)) getOrElse Empty[Expr]
           val cases = fields.get("case_clauses").asArray.asList { (o: JsObject) =>
             val conds = o.fields.get("conditions").asArray.map(extractExpr(_, nextPos))
-            val body = Block(o.fields.get("body").asArray.flatMap(extractStmts(_, nextPos)))
+            val body = Block(o.fields.get("body").asArray.flatMap(extractStmts(_, nextPos))).setPos(nextPos)
             conds.map(c => c -> body)
           }
           val defaultCase = fields.get("default") match {
-            case Some(JsArray(elements)) => Some(Wildcard -> Block(elements.toList.flatMap(extractStmts(_, nextPos))))
+            case Some(JsArray(elements)) => Some(Wildcard -> Block(elements.toList.flatMap(extractStmts(_, nextPos))).setPos(nextPos))
             case _ => None
           }
           init :+ Switch(cond, cases ++ defaultCase)
@@ -488,7 +489,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
             case _ => Nil
           })
           val iterable = fields.get("iterable").map(extractExpr(_, nextPos)) getOrElse Empty[Expr]
-          val body = Block(fields.get("body").asArray.flatMap(extractStmts(_, nextPos)))
+          val body = Block(fields.get("body").asArray.flatMap(extractStmts(_, nextPos))).setPos(nextPos)
           List(Foreach(vars, iterable, body))
 
         case Some(AssignStmtName) =>
@@ -518,13 +519,13 @@ abstract class DevMineParser(parserPath: String) extends Parser {
           fields.get("expression").map(extractExpr(_, nextPos)).toList
 
         case Some(TryStmtName) =>
-          val body = Block(fields.get("body").asArray.flatMap(extractStmts(_, nextPos)))
+          val body = Block(fields.get("body").asArray.flatMap(extractStmts(_, nextPos))).setPos(nextPos)
           val catches = fields.get("catch_clauses").asArray.asList { (o: JsObject) =>
             val params = o.fields.get("params").asArray.as((o: JsObject) => extractField(o, nextPos))
-            val body = Block(o.fields.get("body").asArray.flatMap(extractStmts(_, nextPos)))
+            val body = Block(o.fields.get("body").asArray.flatMap(extractStmts(_, nextPos))).setPos(nextPos)
             params.map(p => p -> body)
           }
-          val finallyBlock = Block(fields.get("finally").asArray.flatMap(extractStmts(_, nextPos)))
+          val finallyBlock = Block(fields.get("finally").asArray.flatMap(extractStmts(_, nextPos))).setPos(nextPos)
           List(Try(body, catches, finallyBlock))
 
         case Some(ThrowStmtName) => obj.getFields("expression") match {

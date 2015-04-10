@@ -30,4 +30,4 @@ libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % "1.3.0"
 )
 
-parallelExecution in Test := false
+//parallelExecution in Test := false

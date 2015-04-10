@@ -524,19 +524,21 @@ object QueryParser extends Parser {
 
       def extractTemplate(template: Template): (List[ast.Type], List[ast.Definition], List[ast.Statement]) = {
         val parents = template.parents.map(extractType)
-        val selfTpes = if (template.self.name == nme.WILDCARD && template.self.tpt == NoType) Nil else {
+        val selfTpes = if (template.self.name == nme.WILDCARD && template.self.tpt.isInstanceOf[TypeTree]) Nil else {
           val vd = extractDef(template.self).asInstanceOf[ast.ValDef]
-          List(vd.copy(modifiers = vd.modifiers | ast.Modifiers.PRIVATE | ast.Modifiers.FINAL))
+          List(vd.copy(modifiers = vd.modifiers | ast.Modifiers.PRIVATE | ast.Modifiers.FINAL).fromAST(vd))
         }
         val body = template.body.flatMap(extractStmts)
         val (definitions, statements) = body.partition(_.isInstanceOf[ast.Definition])
         (parents, selfTpes ++ definitions.map(_.asInstanceOf[ast.Definition]), statements)
       }
 
-      def wrapStatements(asts: List[ast.Statement]): ast.Block = asts match {
+      def wrapStatements(asts: List[ast.Statement], pos: ast.Position): ast.Block = asts match {
         case Nil => ast.Empty.NoStmt
         case (b: ast.Block) :: Nil => b
-        case stmts => ast.Block(stmts).setPos(stmts.head.pos)
+        case stmts =>
+          val block = ast.Block(stmts)
+          if (stmts.head.pos != ast.NoPosition) block.setPos(stmts.head.pos) else block.setPos(pos)
       }
 
       def extractType(tpt: Tree): ast.Type = {
@@ -633,7 +635,7 @@ object QueryParser extends Parser {
           case DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
             val (modifiers, annotations) = extractModifiers(mods, pos)
             val params = vparamss.flatten.map(vd => extractDef(vd).asInstanceOf[ast.ValDef])
-            val body = wrapStatements(extractStmts(rhs))
+            val body = wrapStatements(extractStmts(rhs), pos)
             ast.FunctionDef(modifiers, name.decode, annotations, tparams.map(extractTypeDef), params, extractType(tpt), body)
 
           case td @ TypeDef(mods, name, tparams, rhs) => extractTypeDef(td)
@@ -671,11 +673,11 @@ object QueryParser extends Parser {
             case _ => extractExpr(tree)
           })
 
-          case LabelDef(nm1, _, If(cond, Block(stats, Apply(Ident(nm2), Nil)), _)) if nm1 == nm2 =>
-            List(ast.While(extractExpr(cond), wrapStatements(stats.flatMap(extractStmts))))
+          case LabelDef(nm1, _, ife @ If(cond, Block(stats, Apply(Ident(nm2), Nil)), _)) if nm1 == nm2 =>
+            List(ast.While(extractExpr(cond), wrapStatements(stats.flatMap(extractStmts), extractPosition(ife.pos))))
 
-          case LabelDef(nm1, _, Block(stats, If(cond, Apply(Ident(nm2), Nil), _))) if nm1 == nm2 =>
-            List(ast.Do(extractExpr(cond), wrapStatements(stats.flatMap(extractStmts))))
+          case LabelDef(nm1, _, b @ Block(stats, If(cond, Apply(Ident(nm2), Nil), _))) if nm1 == nm2 =>
+            List(ast.Do(extractExpr(cond), wrapStatements(stats.flatMap(extractStmts), extractPosition(b.pos))))
 
           case ld : LabelDef => throw ParsingFailedError(new RuntimeException(s"Unexpected label-def: $ld"))
 
@@ -711,19 +713,21 @@ object QueryParser extends Parser {
 
         def extractFors(enums: List[Tree], body: ast.Expr, generator: Boolean): ast.Expr = enums match {
           case Nil => body
-          case Apply(Ident(nme.LARROWkw), Bind(name, expr) :: iterable :: Nil) :: xs =>
+          case (a @ Apply(Ident(nme.LARROWkw), (b @ Bind(name, expr)) :: iterable :: Nil)) :: xs =>
             val inner = extractFors(xs, body, generator)
-            val valDef = ast.ValDef(ast.Modifiers.FINAL, name.decode, Nil, ast.Empty.NoType, ast.Empty.NoExpr)
+            val valDef = ast.ValDef(ast.Modifiers.FINAL, name.decode, Nil, ast.Empty.NoType, ast.Empty.NoExpr).setPos(extractPosition(b.pos))
+            val forPos = extractPosition(a.pos)
             expr match {
-              case Ident(nme.WILDCARD) =>
-                ast.Foreach(valDef :: Nil, extractExpr(iterable), inner, generator)
+              case id @ Ident(nme.WILDCARD) =>
+                ast.Foreach(valDef :: Nil, extractExpr(iterable), inner, generator).setPos(forPos)
               case _ =>
                 val extractor = ast.ExtractionValDef(ast.Modifiers.FINAL, extractExpr(expr), Nil, ast.Empty.NoExpr)
+                  .setPos(extractPosition(expr.pos))
                 val block = inner match {
                   case ast.Block(stmts) => ast.Block(extractor :: stmts).fromAST(inner)
                   case stmt => ast.Block(extractor :: stmt :: Nil).fromAST(inner)
                 }
-                ast.Foreach(valDef :: Nil, extractExpr(iterable), block, generator)
+                ast.Foreach(valDef :: Nil, extractExpr(iterable), block, generator).setPos(forPos)
             }
           case (a @ Assign(e1, e2)) :: xs =>
             val inner = extractFors(xs, body, generator)
@@ -746,11 +750,11 @@ object QueryParser extends Parser {
             })
 
           case Try(block, catches, finalizer) =>
-            ast.Try(wrapStatements(extractStmts(block)), catches.map { case c @ CaseDef(pat, guard, body) =>
+            ast.Try(wrapStatements(extractStmts(block), pos), catches.map { case c @ CaseDef(pat, guard, body) =>
               val guarded = ast.Guarded(extractExpr(pat), extractExpr(guard)).setPos(extractPosition(c.pos))
-              val block = wrapStatements(extractStmts(body))
+              val block = wrapStatements(extractStmts(body), extractPosition(c.pos))
               guarded -> block
-            }, wrapStatements(extractStmts(finalizer)))
+            }, wrapStatements(extractStmts(finalizer), pos))
 
           case Function(vparams, body) =>
             ast.FunctionLiteral(vparams.map(p => extractDef(p).asInstanceOf[ast.ValDef]), ast.Empty[ast.Type], extractExpr(body))
@@ -764,7 +768,7 @@ object QueryParser extends Parser {
           case Match(selector, cases) =>
             ast.Switch(extractExpr(selector), cases.map { case c @ CaseDef(pat, guard, body) =>
               val guarded = ast.Guarded(extractExpr(pat), extractExpr(guard)).setPos(extractPosition(c.pos))
-              val block = wrapStatements(extractStmts(body))
+              val block = wrapStatements(extractStmts(body), extractPosition(c.pos))
               guarded -> block
             })
 
@@ -838,7 +842,9 @@ object QueryParser extends Parser {
           case Typed(expr, tpt) =>
             val bound @ ast.Bind(name, _) = extractExpr(expr) match {
               case b: ast.Bind => b
-              case expr => ast.Bind(Names.DEFAULT, expr).setPos(expr.pos)
+              case expr =>
+                val bound = ast.Bind(Names.DEFAULT, expr)
+                if (expr.pos != ast.NoPosition) bound.setPos(expr.pos) else bound.setPos(pos)
             }
             ast.Guarded(bound, ast.InstanceOf(ast.Ident(name).setPos(bound.pos), extractType(tpt)).setPos(bound.pos))
 
