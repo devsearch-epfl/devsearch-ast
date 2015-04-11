@@ -1,7 +1,6 @@
 package devsearch.features
 
 import devsearch.ast._
-import org.apache.spark.rdd.RDD
 
 case class TypedVariable(position: CodeFilePosition, variableType: String, variableName: String) extends Feature(position) {
   def key: String = "variable declaration = " + variableName + ": " + variableType

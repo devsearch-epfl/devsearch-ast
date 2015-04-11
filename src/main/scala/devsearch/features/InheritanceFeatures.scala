@@ -1,7 +1,6 @@
 package devsearch.features
 
 import devsearch.ast._
-import org.apache.spark.rdd.RDD
 
 case class InheritanceFeature(position: CodeFilePosition, className: String, superClassName: String) extends Feature(position) {
   def key: String = "inheritance = " + className + " from " + superClassName
