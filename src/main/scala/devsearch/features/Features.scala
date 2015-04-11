@@ -1,6 +1,7 @@
 package devsearch.features
 
 import devsearch.ast._
+import devsearch.parsers._
 
 abstract class Feature(position: CodeFilePosition) extends java.io.Serializable {
   def key: String
@@ -32,4 +33,9 @@ case class CodeFileLocation(user: String, repoName: String, fileName: String) ex
 case class CodeFilePosition(location: CodeFileLocation, line: Int) extends java.io.Serializable
 
 case class CodeFileData(location: CodeFileLocation, ast: AST) extends java.io.Serializable
+
+object CodeFileData {
+  def apply(location: CodeFileLocation, parser: Parser, source: String): CodeFileData =
+    CodeFileData(location, scala.util.Try(parser.parse(new ContentsSource(location.fileName, source))) getOrElse Empty[AST])
+}
 

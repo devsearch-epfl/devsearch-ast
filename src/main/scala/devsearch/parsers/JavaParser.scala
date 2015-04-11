@@ -15,6 +15,8 @@ import scala.collection.JavaConversions._
 
 object JavaParser extends Parser {
 
+  def language = "Java"
+
   def parse(source: Source): AST = {
     val wrapped = wrappers.view.map { f =>
       try {

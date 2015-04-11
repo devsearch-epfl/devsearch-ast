@@ -12,6 +12,8 @@ import org.scalamacros.paradise.quasiquotes._
 
 object QueryParser extends Parser {
 
+  def language = "Scala"
+
   private lazy val compiler = {
     val settings = new scala.tools.nsc.Settings
     val scalaLib = Option(scala.Predef.getClass.getProtectionDomain.getCodeSource).map(_.getLocation.getPath).getOrElse {
