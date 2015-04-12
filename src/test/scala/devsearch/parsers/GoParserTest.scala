@@ -5,47 +5,118 @@ import devsearch.ast._
 import Modifiers._
 import Empty._
 
-class GoParserTest extends FlatSpec with Matchers {
+class GoParserTest extends FlatSpec with ParserTest {
 
-  "Go source" should "work for parsing bar.go" in {
-    val source = new ContentsSource("bar.go", """
-      // Copyright 2014-2015 The DevMine authors. All rights reserved.
-      // Use of this source code is governed by a BSD-style
-      // license that can be found in the LICENSE file.
-      package main
+  lazy val barGo = new ContentsSource("bar.go", """
+    // Copyright 2014-2015 The DevMine authors. All rights reserved.
+    // Use of this source code is governed by a BSD-style
+    // license that can be found in the LICENSE file.
+    package main
 
-      import "fmt"
+    import "fmt"
 
-      const (
-        maxIter = 200
-      )
+    const (
+      maxIter = 200
+    )
 
-      // myFunc is a very cool func!
-      func myFunc(y int) int {
-        x := y + 100
+    // myFunc is a very cool func!
+    func myFunc(y int) int {
+      x := y + 100
 
-        for i := 0; i < maxIter; i++ {
-          tmp := 0
-          for j := 0; j < maxIter; j++ {
-            tmp += j
-          }
-
-          x += tmp
+      for i := 0; i < maxIter; i++ {
+        tmp := 0
+        for j := 0; j < maxIter; j++ {
+          tmp += j
         }
 
-        fmt.Println(x)
-
-        return 42
+        x += tmp
       }
 
-      func main() {
-        bar := myFunc(10)
+      fmt.Println(x)
 
-        fmt.Println(bar)
+      return 42
+    }
+
+    func main() {
+      bar := myFunc(10)
+
+      fmt.Println(bar)
+    }
+   """)
+
+  lazy val rangeGo = new ContentsSource("range.go", """
+    // Copyright 2014-2015 The project AUTHORS. All rights reserved.
+    // Use of this source code is governed by a BSD-style
+    // license that can be found in the LICENSE file.
+
+    package main
+
+    import (
+      "fmt"
+    )
+
+    func test() {
+      t := true
+      nums := []int{2, 3, 4}
+      sum := 0
+      for _, num := range nums {
+        sum += num
       }
-     """)
+      fmt.Println("sum:",sum)
+    }
+  """)
 
-    val ast = GoParser.parse(source)
+  lazy val fooGo = new ContentsSource("foo.go", """
+    // Copyright 2014-2015 The DevMine authors. All rights reserved.
+    // Use of this source code is governed by a BSD-style
+    // license that can be found in the LICENSE file.
+
+    package main
+
+    import (
+      "fmt"
+    )
+
+    var (
+      x = 42
+    )
+
+    const (
+      plop = "plop"
+    )
+
+    // myFunc is the greatest function ever written
+    func myFunc(foo, bar string, y int) {
+      flop := 42.20
+      if flop > 42 {
+        fmt.Println("YAHOO")
+      }
+      fmt.Println(foo, bar, x, plop, y, flop)
+
+      for i := 0; i < 5; i++ {
+        fmt.Println(i)
+      }
+    }
+
+    func main() {
+      myFunc("foo", "bar", 7)
+    }
+  """)
+
+  "Go parser" should "not leave empty positions in bar.go" in {
+    checkPositions(GoParser.parse(barGo))
+  }
+
+  it should "not leave empty positions in range.go" in {
+    checkPositions(GoParser.parse(rangeGo))
+  }
+
+  it should "not leave empty positions in foo.go" in {
+    checkPositions(GoParser.parse(fooGo))
+  }
+
+  it should "work for parsing bar.go" in {
+    val ast = GoParser.parse(barGo)
     val name = ast match {
       case p : PackageDef => p.name
       case _ => Names.DEFAULT
@@ -74,29 +145,7 @@ class GoParserTest extends FlatSpec with Matchers {
   }
 
   it should "work for parsing ranges" in {
-    val source = new ContentsSource("range.go", """
-      // Copyright 2014-2015 The project AUTHORS. All rights reserved.
-      // Use of this source code is governed by a BSD-style
-      // license that can be found in the LICENSE file.
-
-      package main
-
-      import (
-        "fmt"
-      )
-
-      func test() {
-        t := true
-        nums := []int{2, 3, 4}
-        sum := 0
-        for _, num := range nums {
-          sum += num
-        }
-        fmt.Println("sum:",sum)
-      }
-    """)
-
-    val ast = GoParser.parse(source)
+    val ast = GoParser.parse(rangeGo)
     val name = ast match {
       case p : PackageDef => p.name
       case _ => Names.DEFAULT
@@ -118,44 +167,7 @@ class GoParserTest extends FlatSpec with Matchers {
   }
 
   it should "work for parsing foo.go" in {
-    val source = new ContentsSource("foo.go", """
-      // Copyright 2014-2015 The DevMine authors. All rights reserved.
-      // Use of this source code is governed by a BSD-style
-      // license that can be found in the LICENSE file.
-
-      package main
-
-      import (
-        "fmt"
-      )
-
-      var (
-        x = 42
-      )
-
-      const (
-        plop = "plop"
-      )
-
-      // myFunc is the greatest function ever written
-      func myFunc(foo, bar string, y int) {
-        flop := 42.20
-        if flop > 42 {
-          fmt.Println("YAHOO")
-        }
-        fmt.Println(foo, bar, x, plop, y, flop)
-
-        for i := 0; i < 5; i++ {
-          fmt.Println(i)
-        }
-      }
-
-      func main() {
-        myFunc("foo", "bar", 7)
-      }
-    """)
-
-    val ast = GoParser.parse(source)
+    val ast = GoParser.parse(fooGo)
     val name = ast match {
       case p : PackageDef => p.name
       case _ => Names.DEFAULT

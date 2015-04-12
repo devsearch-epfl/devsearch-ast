@@ -5,12 +5,18 @@ import devsearch.ast._
 import devsearch.ast.Modifiers._
 import devsearch.ast.Empty._
 
-class JavaParserTest extends FlatSpec with Matchers {
+class JavaParserTest extends FlatSpec with ParserTest {
 
-  "Java source" should "be parsable without exceptions" in {
+  "Java parser" should "work without exceptions" in {
     val fileURL = getClass.getResource("/samples/JavaConcepts.java")
     val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
     JavaParser.parse(filePath)
+  }
+
+  it should "not leave any empty positions" in {
+    val fileURL = getClass.getResource("/samples/JavaConcepts.java")
+    val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
+    checkPositions(JavaParser.parse(filePath))
   }
 
   it should "work for parsing constructors" in {

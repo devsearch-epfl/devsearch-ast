@@ -5,7 +5,7 @@ import devsearch.ast._
 import devsearch.ast.Empty._
 import devsearch.ast.Modifiers._
 
-class QueryParserTest extends FlatSpec with Matchers {
+class QueryParserTest extends FlatSpec {
 
   "Query language" should "be parsable" in {
     val source = new ContentsSource("Test.scala", """

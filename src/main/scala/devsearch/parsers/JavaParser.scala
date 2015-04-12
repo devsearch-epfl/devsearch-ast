@@ -15,6 +15,8 @@ import scala.collection.JavaConversions._
 
 object JavaParser extends Parser {
 
+  def language = "Java"
+
   def parse(source: Source): AST = {
     val wrapped = wrappers.view.map { f =>
       try {
@@ -83,9 +85,9 @@ object JavaParser extends Parser {
       (if (ModifierSet.isAbstract(m))     Modifiers.ABSTRACT     else Modifiers.NoModifiers)
     }
 
-    private def arrayType(tpe: Typ, arrayCount: Int): Typ = {
-      if (arrayCount > 0) ArrayType(arrayType(tpe, arrayCount - 1)).setPos(tpe.pos)
-      else tpe
+    private def arrayType(tpe: Typ, arrayCount: Int, pos: Position): Typ = if (arrayCount <= 0) tpe else {
+      val arrTpe = ArrayType(arrayType(tpe, arrayCount - 1, pos))
+      if (tpe.pos != NoPosition) arrTpe.setPos(tpe.pos) else arrTpe.setPos(pos)
     }
 
     private def extractPosition(node: Node): Position = {
@@ -191,7 +193,7 @@ object JavaParser extends Parser {
         val idOpt = Option(vd.getId)
         val name = idOpt.map(id => extractName(id.getName)) getOrElse Names.DEFAULT
         val arrayCount = idOpt.map(_.getArrayCount) getOrElse 0
-        val finalTpe = arrayType(tpe, arrayCount)
+        val finalTpe = arrayType(tpe, arrayCount, extractPosition(vd))
         val init = translate[Expr](vd.getInit)
         inNode(vd)(ValDef(modifiers, name, annotations, finalTpe, init))
       }
@@ -206,7 +208,7 @@ object JavaParser extends Parser {
 
     def visit(decl: ConstructorDeclaration, a: Null) = List(inNode(decl) {
       val throwsAnnots = Option(decl.getThrows).toList.flatten.map(extractName).map { name =>
-        Annotation(Names.THROWS_ANNOTATION, Map(Names.DEFAULT -> inNode(decl)(Ident(name))))
+        inNode(decl)(Annotation(Names.THROWS_ANNOTATION, Map(Names.DEFAULT -> inNode(decl)(Ident(name)))))
       }
       ConstructorDef(extractModifiers(decl.getModifiers),
         translateList[Annotation](decl.getAnnotations) ++ throwsAnnots,
@@ -217,7 +219,7 @@ object JavaParser extends Parser {
 
     def visit(decl: MethodDeclaration, a: Null) = List(inNode(decl) {
       val throwsAnnots = Option(decl.getThrows).toList.flatten.map(extractName).map { name =>
-        Annotation(Names.THROWS_ANNOTATION, Map(Names.DEFAULT -> inNode(decl)(Ident(name))))
+        inNode(decl)(Annotation(Names.THROWS_ANNOTATION, Map(Names.DEFAULT -> inNode(decl)(Ident(name)))))
       }
       FunctionDef(extractModifiers(decl.getModifiers), extractName(decl.getNameExpr),
         translateList[Annotation](decl.getAnnotations) ++ throwsAnnots, translateList[TypeDef](decl.getTypeParameters),
@@ -230,7 +232,7 @@ object JavaParser extends Parser {
       val name = idOpt.map(id => extractName(id.getName)) getOrElse Names.DEFAULT
       val arrayCount = idOpt.map(_.getArrayCount) getOrElse 0
       ValDef(extractModifiers(param.getModifiers), name, translateList[Annotation](param.getAnnotations),
-        arrayType(translate[Typ](param.getType), arrayCount), Empty[Expr], varArgs = param.isVarArgs)
+        arrayType(translate[Typ](param.getType), arrayCount, extractPosition(param)), Empty[Expr], varArgs = param.isVarArgs)
     })
 
     def visit(param: MultiTypeParameter, a: Null) = Nil
@@ -250,7 +252,7 @@ object JavaParser extends Parser {
           case Some(tpe) =>
             val (scope, annotations) = translateScope(tpe.getScope)
             val newAnnotations = translateList[Annotation](tpe.getAnnotations)
-            val newScope = FieldAccess(scope, extractName(tpe.getName), translateList[Typ](tpe.getTypeArgs))
+            val newScope = inNode(tpe)(FieldAccess(scope, extractName(tpe.getName), translateList[Typ](tpe.getTypeArgs)))
             newScope -> (annotations ++ newAnnotations)
           case _ => Empty[Expr] -> Nil
         }
@@ -275,7 +277,7 @@ object JavaParser extends Parser {
       }
     }
 
-    def visit(tpe: ReferenceType, a: Null) = List(inNode(tpe)(arrayType(translate[Typ](tpe.getType), tpe.getArrayCount)))
+    def visit(tpe: ReferenceType, a: Null) = List(inNode(tpe)(arrayType(translate[Typ](tpe.getType), tpe.getArrayCount, extractPosition(tpe))))
 
     def visit(tpe: VoidType, a: Null) = List(PrimitiveTypes.Void)
 
@@ -380,17 +382,15 @@ object JavaParser extends Parser {
     def visit(expr: MethodCallExpr, a: Null) = List(inNode(expr) {
       val name = extractName(expr.getNameExpr)
       val receiver = translate[Expr](expr.getScope)
-      val caller = if (receiver == Empty[Expr]) Ident(name) else FieldAccess(receiver, name, Nil)
+      val caller = inNode(expr)(if (receiver == Empty[Expr]) Ident(name) else FieldAccess(receiver, name, Nil))
       FunctionCall(caller, translateList[Typ](expr.getTypeArgs), translateList[Expr](expr.getArgs))
     })
 
     def visit(expr: NameExpr, a: Null) = List(inNode(expr)(Ident(extractName(expr))))
 
     def visit(expr: ObjectCreationExpr, a: Null) = List(inNode(expr) {
-      val tpe = translate[Typ](expr.getType).asInstanceOf[ClassType].copy(
-        scope = translate[Expr](expr.getScope),
-        tparams = translateList[Typ](expr.getTypeArgs)
-      )
+      val classTpe = translate[Typ](expr.getType).asInstanceOf[ClassType]
+      val tpe = classTpe.copy(scope = translate[Expr](expr.getScope), tparams = translateList[Typ](expr.getTypeArgs)).fromAST(classTpe)
       ConstructorCall(tpe, translateList[Expr](expr.getArgs), translateList[Definition](expr.getAnonymousClassBody))
     })
 
@@ -538,7 +538,7 @@ object JavaParser extends Parser {
           val name = idOpt.map(id => extractName(id.getName)) getOrElse Names.DEFAULT
           val arrayCount = idOpt.map(_.getArrayCount) getOrElse 0
           translateList[Typ](except.getTypes).map { tpe =>
-            val finalTpe = arrayType(tpe, arrayCount)
+            val finalTpe = arrayType(tpe, arrayCount, extractPosition(except))
             ValDef(modifiers, name, annotations, finalTpe, Empty[Expr]).setPos(tpe.pos)
           }
         }

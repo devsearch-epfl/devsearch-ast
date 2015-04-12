@@ -4,7 +4,7 @@ import org.scalatest._
 import devsearch.ast._
 import devsearch.ast.Empty._
 
-class ScalaParserTest extends FunSuite with Matchers {
+class ScalaParserTest extends FunSuite with ParserTest {
 
   var counter = 0
 
@@ -25,7 +25,8 @@ class ScalaParserTest extends FunSuite with Matchers {
 
   def check[T](input: String, tag: String = "") = testCode {
     val source = new ContentsSource("NoFile", input)
-    QueryParser.parse(source)
+    val ast = QueryParser.parse(source)
+    checkPositions(ast)
   }
 
   check(
