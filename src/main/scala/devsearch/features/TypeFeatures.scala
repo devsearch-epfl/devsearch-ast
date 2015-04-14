@@ -3,7 +3,7 @@ package devsearch.features
 import devsearch.ast._
 
 case class TypeReference(position: CodeFilePosition, path: String) extends Feature(position) {
-  def key: String = "type reference = " + path
+  def key: String = "typeReference=" + path
 }
 
 object TypeFeatures extends FeatureExtractor {

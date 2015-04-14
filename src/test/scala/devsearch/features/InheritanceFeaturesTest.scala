@@ -16,4 +16,19 @@ class InheritanceFeaturesTest extends FlatSpec with CodeProvider {
       InheritanceFeature(location at 208, "QWE", "JavaConcepts")
     ))
   }
+
+
+  it should "toString correctly" in {
+    assert(InheritanceFeatures.extract(code).toList.map(_.toString).sortBy(e => e).foldLeft("")((acc, curr) => acc + curr+"\n") ==
+      """inheritance=A from=Serializable,unknown_user,unknown_repo/JavaConcepts.java,363;
+        |inheritance=A from=XXX,unknown_user,unknown_repo/JavaConcepts.java,363;
+        |inheritance=JavaConcepts from=Base,unknown_user,unknown_repo/JavaConcepts.java,12;
+        |inheritance=JavaConcepts from=Serializable,unknown_user,unknown_repo/JavaConcepts.java,12;
+        |inheritance=QWE from=JavaConcepts,unknown_user,unknown_repo/JavaConcepts.java,208;
+        |inheritance=XXX from=Cloneable,unknown_user,unknown_repo/JavaConcepts.java,399;
+        |inheritance=XXX from=Serializable,unknown_user,unknown_repo/JavaConcepts.java,399;
+        |inheritance=Y from=X,unknown_user,unknown_repo/JavaConcepts.java,185;
+        |""".stripMargin
+    )
+  }
 }
