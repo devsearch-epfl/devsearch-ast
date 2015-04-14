@@ -5,7 +5,8 @@ import org.scalatest._
 
 class FunDefFeaturesTest extends FlatSpec with CodeProvider {
   "function extractor" should "work in JavaConcepts.java" in {
-    assert(FunDefFeatures.extract(code).toSet == Set(
+
+    assert(FunDefFeatures.extract(code) == Set(
       FunctionName(location at 149, "mm"),
       FunctionName(location at 182, "m"),
       FunctionName(location at 143, "mm"),
@@ -35,6 +36,8 @@ class FunDefFeaturesTest extends FlatSpec with CodeProvider {
       ThrowsException(location at 262, "ParseException"),
       ThrowsException(location at 306, "ParseException"),
       AbstractFunction(location at 162),
+      ParametricFunction(location at 395),
+      ParametricFunction(location at 369),
       OverridingFunction(location at 381),
       OverridingFunction(location at 143)
     ))

@@ -10,7 +10,7 @@ class ValDefFeaturesTest extends FlatSpec with CodeProvider {
       TypedVariable(location at 376, "Exception", "e"),
       TypedVariable(location at 32,  "devsearch.ast.PrimitiveTypes.Int$", "intWithUnderscore"),
       TypedVariable(location at 109, "Array[Array[devsearch.ast.PrimitiveTypes.Int$]]", "arr4")
-    ).subsetOf(ValDefFeatures.extract(code).toSet))
+    ).subsetOf(ValDefFeatures.extract(code)))
   }
 
 

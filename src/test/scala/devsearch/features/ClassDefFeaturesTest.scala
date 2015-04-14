@@ -3,9 +3,18 @@ package devsearch.features
 import devsearch.utils._
 import org.scalatest.FlatSpec
 
-class InheritanceFeaturesTest extends FlatSpec with CodeProvider {
-  "inheritance extractor" should "extract all class extensions and interface implementations" in {
-    assert(InheritanceFeatures.extract(code).toSet == Set(
+class ClassDefFeaturesTest extends FlatSpec with CodeProvider {
+
+  "classDef extractor" should "work in JavaConcepts.java" in {
+    assert(ClassDefFeatures.extract(code) == Set(
+      ClassName(location at 399, "XXX"),
+      ClassName(location at 185, "Y"),
+      ClassName(location at 393, "Base"),
+      ClassName(location at 12,  "JavaConcepts"),
+      ClassName(location at 59,  "Ugly"),
+      ClassName(location at 363, "A"),
+      ClassName(location at 208, "QWE"),
+      ClassName(location at 175, "X"),
       InheritanceFeature(location at 363, "A", "XXX"),
       InheritanceFeature(location at 185, "Y", "X"),
       InheritanceFeature(location at 399, "XXX", "Serializable"),

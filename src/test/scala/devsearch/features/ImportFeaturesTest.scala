@@ -6,7 +6,7 @@ import org.scalatest.FlatSpec
 class ImportFeaturesTest extends FlatSpec with CodeProvider {
 
   "import extractor" should "extract all imports" in {
-    assert(ImportFeatures.extract(code).toSet == Set(
+    assert(ImportFeatures.extract(code) == Set(
       ImportFeature(location at 10, "java.util"),
       ImportFeature(location at 6,  "com.github.javaparser.ast.CompilationUnit"),
       ImportFeature(location at 9,  "java.io"),

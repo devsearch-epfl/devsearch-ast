@@ -6,7 +6,7 @@ import org.scalatest._
 class StructuralFeaturesTest extends FlatSpec with CodeProvider {
 
   "Structural features" should "be found in JavaConcepts.java" in {
-    assert(StructuralFeatures.extract(code).toSet == Set(
+    assert(StructuralFeatures.extract(code) == Set(
       ControlFeature(location at 248, "if"),
       ControlFeature(location at 268, "if"),
       ControlFeature(location at 280, "if"),

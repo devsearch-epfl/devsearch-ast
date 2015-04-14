@@ -9,18 +9,18 @@ abstract class Feature(position: CodeFilePosition) extends java.io.Serializable 
 }
 
 trait FeatureExtractor extends java.io.Serializable {
-  def extract(data: CodeFileData): TraversableOnce[Feature]
+  def extract(data: CodeFileData): Set[Feature]
 }
 
 object Features extends (CodeFileData => TraversableOnce[Feature]) with java.io.Serializable {
 
   lazy val extractors = List(
+    ClassDefFeatures,
     ImportFeatures,
-    InheritanceFeatures,
-    ValDefFeatures,
+    StructuralFeatures,
     FunDefFeatures,
     TypeFeatures,
-    StructuralFeatures
+    ValDefFeatures
   )
 
   def apply(data: CodeFileData) = extractors.flatMap(_.extract(data))
