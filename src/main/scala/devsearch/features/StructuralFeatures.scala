@@ -3,7 +3,7 @@ package devsearch.features
 import devsearch.ast._
 
 case class ControlFeature(position: CodeFilePosition, ctrl: String) extends Feature(position) {
-  def key = "control statement = " + ctrl
+  def key = "controlStatement=" + ctrl
 }
 
 object StructuralFeatures extends FeatureExtractor {

@@ -10,7 +10,7 @@ trait CodeProvider {
 
 object CodeProvider {
 
-  lazy val location = CodeFileLocation("unknown_repo", "unknown_user", "JavaConcepts.java")
+  lazy val location = CodeFileLocation("unknown_user", "unknown_repo", "JavaConcepts.java")
 
   lazy val code = {
     val fileURL = getClass.getResource("/samples/JavaConcepts.java")

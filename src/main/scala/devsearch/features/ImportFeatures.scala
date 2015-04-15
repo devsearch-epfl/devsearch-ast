@@ -3,7 +3,7 @@ package devsearch.features
 import devsearch.ast._
 
 case class ImportFeature(position: CodeFilePosition, domain: String) extends Feature(position) {
-  def key: String = "domain = " + domain
+  def key: String = "import=" + domain
 }
 
 object ImportFeatures extends FeatureExtractor {

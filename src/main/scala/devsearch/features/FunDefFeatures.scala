@@ -3,23 +3,23 @@ package devsearch.features
 import devsearch.ast._
 
 case class FunctionName(position: CodeFilePosition, name: String) extends Feature(position) {
-  def key: String = "function name = " + name
+  def key: String = "functionName=" + name
 }
 
 case class ArgumentName(position: CodeFilePosition, name: String) extends Feature(position) {
-  def key: String = "function argument name = " + name
+  def key: String = "argumentName=" + name
 }
 
 case class AbstractFunction(position: CodeFilePosition) extends Feature(position) {
-  def key: String = "abstract function"
+  def key: String = "abstractFunction"
 }
 
 case class OverridingFunction(position: CodeFilePosition) extends Feature(position) {
-  def key: String = "overriding function"
+  def key: String = "overridingFunction"
 }
 
 case class ThrowsException(position: CodeFilePosition, exception: String) extends Feature(position) {
-  def key: String = "throws = " + exception
+  def key: String = "throwsException=" + exception
 }
 
 object FunDefFeatures extends FeatureExtractor {

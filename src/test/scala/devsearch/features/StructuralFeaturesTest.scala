@@ -24,4 +24,26 @@ class StructuralFeaturesTest extends FlatSpec with CodeProvider {
       ControlFeature(location at 293, "do")
     ))
   }
+
+
+  it should "toString correctly" in {
+    assert(StructuralFeatures.extract(code).toList.map(_.toString).sortBy(e => e).foldLeft("")((acc, curr) => acc + curr+"\n") ==
+      """controlStatement=do,unknown_user,unknown_repo,JavaConcepts.java,290
+        |controlStatement=do,unknown_user,unknown_repo,JavaConcepts.java,293
+        |controlStatement=for,unknown_user,unknown_repo,JavaConcepts.java,297
+        |controlStatement=for,unknown_user,unknown_repo,JavaConcepts.java,301
+        |controlStatement=foreach,unknown_user,unknown_repo,JavaConcepts.java,294
+        |controlStatement=if,unknown_user,unknown_repo,JavaConcepts.java,248
+        |controlStatement=if,unknown_user,unknown_repo,JavaConcepts.java,268
+        |controlStatement=if,unknown_user,unknown_repo,JavaConcepts.java,276
+        |controlStatement=if,unknown_user,unknown_repo,JavaConcepts.java,280
+        |controlStatement=if,unknown_user,unknown_repo,JavaConcepts.java,282
+        |controlStatement=if,unknown_user,unknown_repo,JavaConcepts.java,315
+        |controlStatement=if,unknown_user,unknown_repo,JavaConcepts.java,326
+        |controlStatement=if,unknown_user,unknown_repo,JavaConcepts.java,333
+        |controlStatement=while,unknown_user,unknown_repo,JavaConcepts.java,286
+        |controlStatement=while,unknown_user,unknown_repo,JavaConcepts.java,287
+        |""".stripMargin
+    )
+  }
 }
