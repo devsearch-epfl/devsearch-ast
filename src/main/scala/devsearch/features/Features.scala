@@ -5,7 +5,7 @@ import devsearch.parsers._
 
 abstract class Feature(position: CodeFilePosition) extends java.io.Serializable {
   def key: String
-  override def toString() = key + "," + position.toString
+  override def toString() = key.replace("\\", "\\\\" ).replace(",", "\\,") + "," + position.toString
 }
 
 trait FeatureExtractor extends java.io.Serializable {
