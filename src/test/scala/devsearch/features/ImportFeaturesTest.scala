@@ -17,14 +17,7 @@ class ImportFeaturesTest extends FlatSpec with CodeProvider {
   }
 
   it should "toString correctly" in {
-    assert(ImportFeatures.extract(code).toList.map(_.toString).sortBy(e => e).foldLeft("")((acc, curr) => acc + curr+"\n") ==
-      """import=com.github.javaparser.JavaParser,unknown_user,unknown_repo,JavaConcepts.java,3
-        |import=com.github.javaparser.ast.CompilationUnit,unknown_user,unknown_repo,JavaConcepts.java,6
-        |import=japa.parser.ParseException,unknown_user,unknown_repo,JavaConcepts.java,5
-        |import=java.io,unknown_user,unknown_repo,JavaConcepts.java,9
-        |import=java.util,unknown_user,unknown_repo,JavaConcepts.java,10
-        |import=org.junit.Ignore,unknown_user,unknown_repo,JavaConcepts.java,7
-        |""".stripMargin
-    )
+    val features = ImportFeatures.extract(code)
+    assert(features == features.map { f => Feature.parse(f.encode) })
   }
 }

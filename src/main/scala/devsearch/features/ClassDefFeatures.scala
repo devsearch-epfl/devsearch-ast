@@ -3,7 +3,7 @@ package devsearch.features
 import devsearch.ast._
 
 case class ClassName(position: CodeFilePosition, name: String) extends Feature(position) {
-  def key: String = "class name = " + name
+  def key: String = "className=" + name
 }
 
 case class InheritanceFeature(position: CodeFilePosition, className: String, superClassName: String) extends Feature(position) {
