@@ -407,3 +407,10 @@ object Operators {
     }
   }
 }
+
+class Traverser {
+  def traverse(ast: AST): Unit = {
+    val (children, _) = Operators.unapply(ast)
+    children.foreach(traverse)
+  }
+}

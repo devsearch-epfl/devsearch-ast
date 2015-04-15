@@ -14,8 +14,8 @@ trait Source extends Serializable {
 
   lazy val lineSizes = {
     def indexes(o: Int, lineSizes: List[Int]): List[Int] = {
-      val idx = contents.indexOf(o, '\n')
-      if (idx >= 0) indexes(o + 1, (idx - o) :: lineSizes)
+      val idx = contents.indexOf('\n', o)
+      if (idx >= 0) indexes(idx + 1, (idx - o) :: lineSizes)
       else (contents.length - o) :: lineSizes
     }
     indexes(0, Nil).reverse
@@ -24,9 +24,9 @@ trait Source extends Serializable {
   def offsetCoords(offset: Int) = {
     def extractPosition(offset: Int, line: Int, sizes: List[Int]): (Int, Int) = sizes match {
       case lineSize :: xs =>
-        if (offset < lineSize) (line, offset)
-        else extractPosition(offset - lineSize, line + 1, xs)
-      case _ => (offset, line)
+        if (offset < lineSize + 1) (line, offset)
+        else extractPosition(offset - lineSize - 1, line + 1, xs)
+      case _ => (line, offset)
     }
     extractPosition(offset, 0, lineSizes)
   }

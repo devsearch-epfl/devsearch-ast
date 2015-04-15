@@ -10,6 +10,10 @@ case class ArgumentName(position: CodeFilePosition, name: String) extends Featur
   def key: String = "argumentName=" + name
 }
 
+case class ParametricFunction(position: CodeFilePosition) extends Feature(position) {
+  def key: String = "function is parametric"
+}
+
 case class AbstractFunction(position: CodeFilePosition) extends Feature(position) {
   def key: String = "abstractFunction"
 }
@@ -23,10 +27,10 @@ case class ThrowsException(position: CodeFilePosition, exception: String) extend
 }
 
 object FunDefFeatures extends FeatureExtractor {
-  def extract(data: CodeFileData) = data.ast.collect {
-    case fd @ FunctionDef(mods, name, annotations, _, params, _, _) =>
+  def extract(data: CodeFileData) = data.ast.collect[Feature] {
+    case fd @ FunctionDef(mods, name, annotations, tparams, params, _, _) =>
       // extract function name feature
-      (if (name != Names.DEFAULT) Set(FunctionName(data.location at fd.pos, name)) else Set.empty[Feature]) ++
+      (if (name != Names.DEFAULT) Set(FunctionName(data.location at fd.pos, name)) else Set.empty) ++
       // extract function parameter names features
       params.collect { case vd if vd.name != Names.DEFAULT => ArgumentName(data.location at vd.pos, vd.name) }.toSet ++
       // extract thrown exception type features
@@ -38,9 +42,11 @@ object FunDefFeatures extends FeatureExtractor {
         OverridingFunction(data.location at a.pos)
       }.toSet ++
       // extract whether function is abstract feature
-      (if (mods.isAbstract) Set(AbstractFunction(data.location at fd.pos)) else Set.empty[Feature])
+      (if (mods.isAbstract) Set(AbstractFunction(data.location at fd.pos)) else Set.empty) ++
+      // extract whether functions is parametric, i.e. has type parameters
+      (if (tparams.nonEmpty) Set(ParametricFunction(data.location at fd.pos)) else Set.empty)
 
-    case _ => Set.empty[Feature]
+    case _ => Set.empty
   }
 }
 
