@@ -5,7 +5,7 @@ import devsearch.parsers._
 
 abstract class Feature(position: CodeFilePosition) extends java.io.Serializable {
   def key: String
-  override def toString() = key + "," + position.toString + ";"
+  override def toString() = key + "," + position.toString
 }
 
 trait FeatureExtractor extends java.io.Serializable {
@@ -32,7 +32,7 @@ case class CodeFileLocation(user: String, repoName: String, fileName: String) ex
 }
 
 case class CodeFilePosition(location: CodeFileLocation, line: Int) extends java.io.Serializable{
-  override def toString() = location.user+","+location.repoName+"/"+location.fileName+","+line
+  override def toString() = location.user+","+location.repoName+","+location.fileName+","+line
 }
 
 case class CodeFileData(location: CodeFileLocation, ast: AST) extends java.io.Serializable
