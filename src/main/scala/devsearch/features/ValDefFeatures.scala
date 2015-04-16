@@ -1,5 +1,6 @@
 package devsearch.features
 
+import devsearch.ast.Empty.NoType
 import devsearch.ast._
 
 case class TypedVariable(position: CodeFilePosition, variableType: String, variableName: String) extends Feature(position) {
@@ -9,14 +10,18 @@ case class TypedVariable(position: CodeFilePosition, variableType: String, varia
 object ValDefFeatures extends FeatureExtractor {
 
   def convertTypeToString(tpe: Type): String = {
-    // TODO(julien, mateusz): need to integrate as many types as possible, and make current strings more readable
     tpe match {
       case classType: ClassType => classType.name
-      case primitiveType: PrimitiveType => primitiveType.getClass.getCanonicalName
+      case primitiveType: PrimitiveType => primitiveType.getClass.getSimpleName.stripSuffix("$")
       case arrayType: ArrayType => "Array[" + convertTypeToString(arrayType.base) + "]"
+      case functionType: FunctionType => functionType.from + " -> " + functionType.to
       case wildcardType: WildcardType => "? wildcard " + wildcardType.subType + " " + wildcardType.superType
-      case typeHint: TypeHint => "type hint"
-      case _ => "unknown_type"
+      case AnyType => "Any"
+      case BottomType => "Bottom"
+      case typeHint: TypeHint => "type hint: " + typeHint.hint
+      case complexType: ComplexType => "complex type"
+      case NoType => "NoType"
+      case _ => "unknown type"
     }
   }
 

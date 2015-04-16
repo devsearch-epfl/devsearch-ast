@@ -8,8 +8,8 @@ class ValDefFeaturesTest extends FlatSpec with CodeProvider {
     // TODO(julien, mateusz): add a test for each type name
     assert(Set[Feature](
       TypedVariable(location at 376, "Exception", "e"),
-      TypedVariable(location at 32,  "devsearch.ast.PrimitiveTypes.Int$", "intWithUnderscore"),
-      TypedVariable(location at 109, "Array[Array[devsearch.ast.PrimitiveTypes.Int$]]", "arr4")
+      TypedVariable(location at 32,  "Int", "intWithUnderscore"),
+      TypedVariable(location at 109, "Array[Array[Int]]", "arr4")
     ).subsetOf(ValDefFeatures.extract(code)))
   }
 
