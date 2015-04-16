@@ -5,34 +5,43 @@ import devsearch.ast._
 import devsearch.ast.Modifiers._
 import devsearch.ast.Empty._
 
-class JavaParserTest extends FlatSpec with Matchers {
+class JavaParserTest extends FlatSpec with ParserTest {
 
-  "Java source" should "be parsable without exceptions" in {
+  "Java parser" should "work without exceptions" in {
     val fileURL = getClass.getResource("/samples/JavaConcepts.java")
     val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
     JavaParser.parse(filePath)
   }
 
+  it should "not leave any empty positions" in {
+    val fileURL = getClass.getResource("/samples/JavaConcepts.java")
+    val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
+    checkPositions(JavaParser.parse(filePath))
+  }
+
   it should "work for parsing constructors" in {
-    val source = new ContentsSource("""
+    val source = new ContentsSource("ClassWithAConstructor.java", """
       class ClassWithAConstructor {
         protected ClassWithAConstructor(int a, String b) throws This, AndThat, AndWhatElse {
         }
       }
     """)
 
-    assert(JavaParser.parse(source) == PackageDef(Names.default, Nil, Nil, List(
+    assert(JavaParser.parse(source) == PackageDef(Names.DEFAULT, Nil, Nil, List(
       ClassDef(NoModifiers, "ClassWithAConstructor", Nil, Nil, Nil, List(
-        ConstructorDef(PROTECTED, "ClassWithAConstructor", Nil, Nil, List(
-          ValDef(NoModifiers, "a", Nil, PrimitiveTypes.Int, Empty[Expr]),
-          ValDef(NoModifiers, "b", Nil, PrimitiveTypes.String, Empty[Expr])
-        ), List("This", "AndThat", "AndWhatElse"), Block(Nil))
-      ), false)
+        ConstructorDef(PROTECTED,
+          List("This", "AndThat", "AndWhatElse").map { s =>
+            Annotation(Names.THROWS_ANNOTATION, Map(Names.DEFAULT -> Ident(s)))
+          }, Nil, List(
+            ValDef(NoModifiers, "a", Nil, PrimitiveTypes.Int, Empty[Expr]),
+            ValDef(NoModifiers, "b", Nil, PrimitiveTypes.String, Empty[Expr])
+          ),Block(Nil))
+      ), ClassSort)
     )))
   }
 
   it should "work for imports and functions" in {
-    val source = new ContentsSource("""
+    val source = new ContentsSource("ParametrizedLambdas.java", """
       package com.github.javapasrser.bdd.parsing;
       import java.util.function.Function;
       public class ParameterizedLambdas {
@@ -49,22 +58,67 @@ class JavaParserTest extends FlatSpec with Matchers {
         List(ClassDef(PUBLIC,"ParameterizedLambdas",List(),List(),List(),
           List(FunctionDef(PUBLIC | STATIC,"main",List(),List(),
             List(ValDef(NoModifiers,"args",List(),ArrayType(PrimitiveTypes.String),NoExpr,false)),
-            PrimitiveTypes.Void,List(),Block(List(
+            PrimitiveTypes.Void,Block(List(
               ValDef(NoModifiers,"f1",List(),
-                ClassType("Function",NoType,List(),List(ClassType("Integer",NoType,List(),List()), PrimitiveTypes.String)),
+                ClassType(NoExpr,"Function",List(),List(ClassType(NoExpr,"Integer",List(),List()), PrimitiveTypes.String)),
                 FunctionLiteral(
-                  List(ValDef(NoModifiers,"i",List(),ClassType("Integer",NoType,List(),List()),NoExpr,false)),
-                  FunctionCall(Ident("String"),"valueOf",List(),List(Ident("i")))),false),
+                  List(ValDef(NoModifiers,"i",List(),ClassType(NoExpr,"Integer",List(),List()),NoExpr,false)), NoType,
+                  FunctionCall(FieldAccess(Ident("String"),"valueOf",List()),List(),List(Ident("i")))),false),
               ValDef(NoModifiers,"f2",List(),
-                ClassType("Function",NoType,List(),List(ClassType("Integer",NoType,List(),List()), PrimitiveTypes.String)),
+                ClassType(NoExpr,"Function",List(),List(ClassType(NoExpr,"Integer",List(),List()), PrimitiveTypes.String)),
                 FunctionLiteral(
-                  List(ValDef(NoModifiers,"i",List(),NoType,NoExpr,false)),
-                  FunctionCall(Ident("String"),"valueOf",List(),List(Ident("i")))),false),
+                  List(ValDef(NoModifiers,"i",List(),NoType,NoExpr,false)), NoType,
+                  FunctionCall(FieldAccess(Ident("String"),"valueOf",List()),List(),List(Ident("i")))),false),
               ValDef(NoModifiers,"f3",List(),
-                ClassType("Function",NoType,List(),List(ClassType("Integer",NoType,List(),List()), PrimitiveTypes.String)),
+                ClassType(NoExpr,"Function",List(),List(ClassType(NoExpr,"Integer",List(),List()), PrimitiveTypes.String)),
                 FunctionLiteral(
-                  List(ValDef(NoModifiers,"i",List(),NoType,NoExpr,false)),
-                  FunctionCall(Ident("String"),"valueOf",List(),List(Ident("i")))),false)
-              )))),false))))
+                  List(ValDef(NoModifiers,"i",List(),NoType,NoExpr,false)), NoType,
+                  FunctionCall(FieldAccess(Ident("String"),"valueOf",List()),List(),List(Ident("i")))),false)
+              )))),ClassSort))))
+  }
+
+  it should "work for switch statements" in {
+    val source = new ContentsSource("Test.java", """
+      class Test {
+        public void toto(int i) {
+          switch(i) {
+          case 0: System.out.println("1");
+          case 1: System.out.println("0");
+          case 2: System.out.println("5");
+          case 3: System.out.println("3");
+          default:
+          }
+        }
+      }
+    """)
+
+    assert(JavaParser.parse(source) ==  PackageDef(Names.DEFAULT,List(),List(),List(
+      ClassDef(NoModifiers,"Test",List(),List(),List(),List(
+        FunctionDef(PUBLIC,"toto",List(),List(),List(ValDef(NoModifiers,"i",List(),PrimitiveTypes.Int,NoExpr,false)),PrimitiveTypes.Void,Block(List(
+          Switch(Ident("i"),List(
+            (SimpleLiteral(PrimitiveTypes.Int,"0"),Block(List(
+              FunctionCall(FieldAccess(FieldAccess(Ident("System"),"out",List()),"println",List()),List(),List(SimpleLiteral(PrimitiveTypes.String,"1")))))),
+            (SimpleLiteral(PrimitiveTypes.Int,"1"),Block(List(
+              FunctionCall(FieldAccess(FieldAccess(Ident("System"),"out",List()),"println",List()),List(),List(SimpleLiteral(PrimitiveTypes.String,"0")))))),
+            (SimpleLiteral(PrimitiveTypes.Int,"2"),Block(List(
+              FunctionCall(FieldAccess(FieldAccess(Ident("System"),"out",List()),"println",List()),List(),List(SimpleLiteral(PrimitiveTypes.String,"5")))))),
+            (SimpleLiteral(PrimitiveTypes.Int,"3"),Block(List(
+              FunctionCall(FieldAccess(FieldAccess(Ident("System"),"out",List()),"println",List()),List(),List(SimpleLiteral(PrimitiveTypes.String,"3")))))),
+            (NoExpr,NoStmt))))))),ClassSort))))
+  }
+
+  it should "work without enclosing class" in {
+    val source = new ContentsSource("Something.java", """
+      public void doSomething(int i) {
+        return i + 2;
+      }
+    """)
+
+    assert(JavaParser.parse(source) == PackageDef(Names.DEFAULT,List(),List(),List(
+      ClassDef(NoModifiers,Names.DEFAULT,List(),List(),List(),List(
+        FunctionDef(PUBLIC,"doSomething",List(),List(),
+          List(ValDef(NoModifiers,"i",List(),PrimitiveTypes.Int,NoExpr,false)),PrimitiveTypes.Void,
+          Block(List(Return(BinaryOp(Ident("i"),"+",SimpleLiteral(PrimitiveTypes.Int,"2"))))))
+      ),ClassSort))))
   }
 }

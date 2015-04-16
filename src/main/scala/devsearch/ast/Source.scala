@@ -1,32 +1,38 @@
 package devsearch.ast
 
+case class SourceCreationError(cause: Throwable) extends Exception("Couldn't create source: " + cause.getMessage, cause)
+
 /**
  * Source
  *
  * Flexible code source base trait that is associated to AST positions. This is useful to
  * refer back to the source code from a position, be it for reporting or feature extraction.
  */
-trait Source {
+trait Source extends Serializable {
   def path: String
   def contents: Array[Char]
 
   lazy val lineSizes = {
     def indexes(o: Int, lineSizes: List[Int]): List[Int] = {
-      val idx = contents.indexOf(o, '\n')
-      if (idx >= 0) indexes(o + 1, (idx - o) :: lineSizes)
-      else (contents.size - o) :: lineSizes
+      val idx = contents.indexOf('\n', o)
+      if (idx >= 0) indexes(idx + 1, (idx - o) :: lineSizes)
+      else (contents.length - o) :: lineSizes
     }
     indexes(0, Nil).reverse
   }
 
-  def position(offset: Int) = {
+  def offsetCoords(offset: Int) = {
     def extractPosition(offset: Int, line: Int, sizes: List[Int]): (Int, Int) = sizes match {
       case lineSize :: xs =>
-        if (offset < lineSize) (line, offset)
-        else extractPosition(offset - lineSize, line + 1, xs)
-      case _ => (offset, line)
+        if (offset < lineSize + 1) (line, offset)
+        else extractPosition(offset - lineSize - 1, line + 1, xs)
+      case _ => (line, offset)
     }
-    val (line, col) = extractPosition(offset, 0, lineSizes)
+    extractPosition(offset, 0, lineSizes)
+  }
+
+  def position(offset: Int) = {
+    val (line, col) = offsetCoords(offset)
     SimplePosition(this, line, col)
   }
 
@@ -44,10 +50,35 @@ case object NoSource extends Source {
 }
 
 class FileSource(val path: String) extends Source {
-  val contents = scala.io.Source.fromFile(path).toArray
+  val contents = try {
+    scala.io.Source.fromFile(path).toArray
+  } catch {
+    case io: java.io.IOException => throw SourceCreationError(io)
+  }
 }
 
-class ContentsSource(str: String) extends Source {
-  val path = "$$memorySource"
-  val contents = str.toArray
+object ContentsSource {
+  private val random = new java.util.Random
+  private val tmpDir = System.getProperty("java.io.tmpdir") + "/"
+  private def fileName(path: String) = tmpDir + "devsearch-input-" + random.nextInt(Integer.MAX_VALUE) + "/" + path
+}
+
+class ContentsSource(_path: String, _contents: String) extends Source {
+  lazy val path = {
+    var output : java.io.BufferedWriter = null
+    try {
+      val fileName = ContentsSource.fileName(_path)
+      val file = new java.io.File(fileName)
+      file.getParentFile.mkdirs()
+      output = new java.io.BufferedWriter(new java.io.FileWriter(file))
+      output.write(_contents)
+      fileName
+    } catch {
+      case io: java.io.IOException => throw SourceCreationError(io)
+    } finally {
+      if (output != null) output.close
+    }
+  }
+
+  val contents = _contents.toArray
 }

@@ -15,14 +15,31 @@ import scala.collection.JavaConversions._
 
 object JavaParser extends Parser {
 
+  def language = "Java"
+
   def parse(source: Source): AST = {
-    try {
-      val cu = com.github.javaparser.JavaParser.parse(source.toStream)
-      new JavaASTVisitor(source).translate[AST](cu)
-    } catch {
-      case io: java.io.IOException => throw ParsingFailedError(io)
+    val wrapped = wrappers.view.map { f =>
+      try {
+        val src = new ContentsSource(source.path, f(source.contents.mkString))
+        val cu = com.github.javaparser.JavaParser.parse(src.toStream)
+        new JavaASTVisitor(src).translate[AST](cu)
+      } catch {
+        case io: java.io.IOException => throw ParsingFailedError(io)
+        case pe: com.github.javaparser.ParseException => pe
+      }
+    }
+
+    wrapped.collectFirst { case ast: AST => ast } match {
+      case Some(ast) => ast
+      case None => throw ParsingFailedError(wrapped.last.asInstanceOf[Throwable])
     }
   }
+
+  private val wrappers: List[String => String] = List(
+    s => s,
+    s => s"class ${Names.DEFAULT} { $s }",
+    s => s"class ${Names.DEFAULT} { public void ${Names.DEFAULT}() { $s } }"
+  )
 
   private def mapSafe[A,B](list: java.util.List[A])(f: A => B) = {
     Option(list).toList.flatten.flatMap(element => Option(element).map(f).toList)
@@ -49,13 +66,13 @@ object JavaParser extends Parser {
         case (Some(qualifier), Some(field)) => extractName(qualifier) + "." + field
         case (Some(qualifier), None) => extractName(qualifier)
         case (None, Some(field)) => field
-        case (None, None) => Names.default
+        case (None, None) => Names.DEFAULT
       }
-      case Some(n) => Option(n.getName) getOrElse Names.default
-      case None => Names.default
+      case Some(n) => Option(n.getName) getOrElse Names.DEFAULT
+      case None => Names.DEFAULT
     }
 
-    private def extractName(s: String): String = Option(s) getOrElse Names.default
+    private def extractName(s: String): String = Option(s) getOrElse Names.DEFAULT
 
     private def extractModifiers(m: Int): Modifiers = {
       (if (ModifierSet.isPublic(m))       Modifiers.PUBLIC       else Modifiers.NoModifiers) |
@@ -64,16 +81,13 @@ object JavaParser extends Parser {
       (if (ModifierSet.isStatic(m))       Modifiers.STATIC       else Modifiers.NoModifiers) |
       (if (ModifierSet.isFinal(m))        Modifiers.FINAL        else Modifiers.NoModifiers) |
       (if (ModifierSet.isSynchronized(m)) Modifiers.SYNCHRONIZED else Modifiers.NoModifiers) |
-      (if (ModifierSet.isVolatile(m))     Modifiers.VOLATILE     else Modifiers.NoModifiers) |
-      (if (ModifierSet.isTransient(m))    Modifiers.TRANSIENT    else Modifiers.NoModifiers) |
       (if (ModifierSet.isNative(m))       Modifiers.NATIVE       else Modifiers.NoModifiers) |
-      (if (ModifierSet.isAbstract(m))     Modifiers.ABSTRACT     else Modifiers.NoModifiers) |
-      (if (ModifierSet.isStrictfp(m))     Modifiers.STRICT       else Modifiers.NoModifiers)
+      (if (ModifierSet.isAbstract(m))     Modifiers.ABSTRACT     else Modifiers.NoModifiers)
     }
 
-    private def arrayType(tpe: Typ, arrayCount: Int): Typ = {
-      if (arrayCount > 0) ArrayType(arrayType(tpe, arrayCount - 1)).setPos(tpe.pos)
-      else tpe
+    private def arrayType(tpe: Typ, arrayCount: Int, pos: Position): Typ = if (arrayCount <= 0) tpe else {
+      val arrTpe = ArrayType(arrayType(tpe, arrayCount - 1, pos))
+      if (tpe.pos != NoPosition) arrTpe.setPos(tpe.pos) else arrTpe.setPos(pos)
     }
 
     private def extractPosition(node: Node): Position = {
@@ -96,7 +110,7 @@ object JavaParser extends Parser {
 
     private def inNode[A <: AST](node: Node)(ast: => A): A = {
       val positioned = ast.setPos(extractPosition(node))
-      extractComment(node).foreach(positioned.setComment(_))
+      extractComment(node).foreach(positioned.setComment)
       positioned
     }
 
@@ -112,7 +126,7 @@ object JavaParser extends Parser {
         val name = extractName(p.getName)
         val annotations = translateList[Annotation](p.getAnnotations)
         (name, annotations)
-      }.getOrElse(Names.default -> Nil)
+      }.getOrElse(Names.DEFAULT -> Nil)
 
       PackageDef(name, annotations, translateList[Import](cu.getImports), translateList[Definition](cu.getTypes))
     })
@@ -122,7 +136,8 @@ object JavaParser extends Parser {
     })
 
     def visit(tp: TypeParameter, a: Null) = List(inNode(tp) {
-      TypeDef(extractName(tp.getName), translateList[Annotation](tp.getAnnotations), Nil, translateList[Typ](tp.getTypeBound))
+      TypeDef(Modifiers.NoModifiers, extractName(tp.getName),
+        translateList[Annotation](tp.getAnnotations), Nil, Nil, translateList[Typ](tp.getTypeBound))
     })
     
     //- Body ----------------------------------------------
@@ -137,10 +152,15 @@ object JavaParser extends Parser {
 
     def visit(decl: ClassOrInterfaceDeclaration, a: Null) = List(inNode(decl) {
       val (name, modifiers, annotations, members) = extractTypeDeclaration(decl)
+      val abstractedMembers = members.map {
+        case fd: FunctionDef if decl.isInterface => fd.copy(modifiers = fd.modifiers | Modifiers.ABSTRACT).fromAST(fd)
+        case vd: ValDef if decl.isInterface => vd.copy(modifiers = vd.modifiers | Modifiers.STATIC | Modifiers.FINAL).fromAST(vd)
+        case m => m
+      }
       ClassDef(modifiers, name, annotations,
         translateList[TypeDef](decl.getTypeParameters),
         translateList[ClassType](decl.getExtends) ++ translateList[ClassType](decl.getImplements),
-        members, decl.isInterface)
+        abstractedMembers, if (decl.isInterface) TraitSort else ClassSort)
     })
 
     def visit(decl: EnumDeclaration, a: Null) = List(inNode(decl) {
@@ -171,9 +191,9 @@ object JavaParser extends Parser {
     private def translateVariables(nodes: java.util.List[VariableDeclarator], modifiers: Modifiers, annotations: List[Annotation], tpe: Typ): List[ValDef] = {
       mapSafe(nodes) { vd =>
         val idOpt = Option(vd.getId)
-        val name = idOpt.map(id => extractName(id.getName)) getOrElse Names.default
+        val name = idOpt.map(id => extractName(id.getName)) getOrElse Names.DEFAULT
         val arrayCount = idOpt.map(_.getArrayCount) getOrElse 0
-        val finalTpe = arrayType(tpe, arrayCount)
+        val finalTpe = arrayType(tpe, arrayCount, extractPosition(vd))
         val init = translate[Expr](vd.getInit)
         inNode(vd)(ValDef(modifiers, name, annotations, finalTpe, init))
       }
@@ -187,27 +207,32 @@ object JavaParser extends Parser {
     }
 
     def visit(decl: ConstructorDeclaration, a: Null) = List(inNode(decl) {
-      ConstructorDef(extractModifiers(decl.getModifiers), extractName(decl.getNameExpr),
-        translateList[Annotation](decl.getAnnotations), translateList[TypeDef](decl.getTypeParameters),
+      val throwsAnnots = Option(decl.getThrows).toList.flatten.map(extractName).map { name =>
+        inNode(decl)(Annotation(Names.THROWS_ANNOTATION, Map(Names.DEFAULT -> inNode(decl)(Ident(name)))))
+      }
+      ConstructorDef(extractModifiers(decl.getModifiers),
+        translateList[Annotation](decl.getAnnotations) ++ throwsAnnots,
+        translateList[TypeDef](decl.getTypeParameters),
         translateList[ValDef](decl.getParameters),
-        Option(decl.getThrows).toList.flatten.map(extractName(_)),
         translate[Block](decl.getBlock))
     })
 
     def visit(decl: MethodDeclaration, a: Null) = List(inNode(decl) {
+      val throwsAnnots = Option(decl.getThrows).toList.flatten.map(extractName).map { name =>
+        inNode(decl)(Annotation(Names.THROWS_ANNOTATION, Map(Names.DEFAULT -> inNode(decl)(Ident(name)))))
+      }
       FunctionDef(extractModifiers(decl.getModifiers), extractName(decl.getNameExpr),
-        translateList[Annotation](decl.getAnnotations), translateList[TypeDef](decl.getTypeParameters),
+        translateList[Annotation](decl.getAnnotations) ++ throwsAnnots, translateList[TypeDef](decl.getTypeParameters),
         translateList[ValDef](decl.getParameters), translate[Typ](decl.getType),
-        Option(decl.getThrows).toList.flatten.map(extractName(_)),
         translate[Block](decl.getBody))
     })
 
     def visit(param: Parameter, a: Null) = List(inNode(param) {
       val idOpt = Option(param.getId)
-      val name = idOpt.map(id => extractName(id.getName)) getOrElse Names.default
+      val name = idOpt.map(id => extractName(id.getName)) getOrElse Names.DEFAULT
       val arrayCount = idOpt.map(_.getArrayCount) getOrElse 0
       ValDef(extractModifiers(param.getModifiers), name, translateList[Annotation](param.getAnnotations),
-        arrayType(translate[Typ](param.getType), arrayCount), Empty[Expr], varArgs = param.isVarArgs)
+        arrayType(translate[Typ](param.getType), arrayCount, extractPosition(param)), Empty[Expr], varArgs = param.isVarArgs)
     })
 
     def visit(param: MultiTypeParameter, a: Null) = Nil
@@ -222,9 +247,20 @@ object JavaParser extends Parser {
 
     def visit(tpe: ClassOrInterfaceType, a: Null) = List(inNode(tpe) {
       val name = extractName(tpe.getName)
-      if (name == "String") PrimitiveTypes.String
-      else ClassType(extractName(tpe.getName), translate[Typ](tpe.getScope),
-        translateList[Annotation](tpe.getAnnotations), translateList[Typ](tpe.getTypeArgs))
+      if (name == "String") PrimitiveTypes.String else {
+        def translateScope(cot: ClassOrInterfaceType): (Expr, List[Annotation]) = Option(cot) match {
+          case Some(tpe) =>
+            val (scope, annotations) = translateScope(tpe.getScope)
+            val newAnnotations = translateList[Annotation](tpe.getAnnotations)
+            val newScope = inNode(tpe)(FieldAccess(scope, extractName(tpe.getName), translateList[Typ](tpe.getTypeArgs)))
+            newScope -> (annotations ++ newAnnotations)
+          case _ => Empty[Expr] -> Nil
+        }
+
+        val (scope, annotations) = translateScope(tpe.getScope)
+        ClassType(scope, extractName(tpe.getName),
+          annotations ++ translateList[Annotation](tpe.getAnnotations), translateList[Typ](tpe.getTypeArgs))
+      }
     })
 
     def visit(tpe: PrimitiveType, a: Null) = List {
@@ -241,7 +277,7 @@ object JavaParser extends Parser {
       }
     }
 
-    def visit(tpe: ReferenceType, a: Null) = List(inNode(tpe)(arrayType(translate[Typ](tpe.getType), tpe.getArrayCount)))
+    def visit(tpe: ReferenceType, a: Null) = List(inNode(tpe)(arrayType(translate[Typ](tpe.getType), tpe.getArrayCount, extractPosition(tpe))))
 
     def visit(tpe: VoidType, a: Null) = List(PrimitiveTypes.Void)
 
@@ -305,7 +341,7 @@ object JavaParser extends Parser {
         case Some(BinaryExpr.Operator.times)          => "*"
         case Some(BinaryExpr.Operator.divide)         => "/"
         case Some(BinaryExpr.Operator.remainder)      => "%"
-        case _                                        => Names.noop
+        case _                                        => Names.NOOP
       }, translate[Expr](expr.getRight))
     })
 
@@ -344,28 +380,23 @@ object JavaParser extends Parser {
     def visit(expr: NullLiteralExpr, a: Null)            = List(NullLiteral)
     
     def visit(expr: MethodCallExpr, a: Null) = List(inNode(expr) {
-      FunctionCall(translate[Expr](expr.getScope), extractName(expr.getNameExpr),
-        translateList[Typ](expr.getTypeArgs), translateList[Expr](expr.getArgs))
+      val name = extractName(expr.getNameExpr)
+      val receiver = translate[Expr](expr.getScope)
+      val caller = inNode(expr)(if (receiver == Empty[Expr]) Ident(name) else FieldAccess(receiver, name, Nil))
+      FunctionCall(caller, translateList[Typ](expr.getTypeArgs), translateList[Expr](expr.getArgs))
     })
 
     def visit(expr: NameExpr, a: Null) = List(inNode(expr)(Ident(extractName(expr))))
 
     def visit(expr: ObjectCreationExpr, a: Null) = List(inNode(expr) {
-      ConstructorCall(translate[Expr](expr.getScope), translate[Typ](expr.getType).asInstanceOf[ClassType],
-        translateList[Typ](expr.getTypeArgs), translateList[Expr](expr.getArgs),
-        translateList[Definition](expr.getAnonymousClassBody))
+      val classTpe = translate[Typ](expr.getType).asInstanceOf[ClassType]
+      val tpe = classTpe.copy(scope = translate[Expr](expr.getScope), tparams = translateList[Typ](expr.getTypeArgs)).fromAST(classTpe)
+      ConstructorCall(tpe, translateList[Expr](expr.getArgs), translateList[Definition](expr.getAnonymousClassBody))
     })
 
-    private def translatePath(expr: Expr): Typ = expr match {
-      case FieldAccess(receiver, name, tparams) => ClassType(name, translatePath(receiver), Nil, tparams).copyFrom(expr)
-      case MethodAccess(receiver, name, tparams) => ClassType(name, receiver, Nil, tparams).copyFrom(expr)
-      case Ident(name) => ClassType(name, Empty[Typ], Nil, Nil).copyFrom(expr)
-      case _ => Empty[Typ]
-    }
+    def visit(expr: ThisExpr, a: Null) = List(inNode(expr)(This(translate[Expr](expr.getClassExpr))))
 
-    def visit(expr: ThisExpr, a: Null) = List(inNode(expr)(This(translatePath(translate[Expr](expr.getClassExpr)))))
-
-    def visit(expr: SuperExpr, a: Null) = List(inNode(expr)(Super(translatePath(translate[Expr](expr.getClassExpr)))))
+    def visit(expr: SuperExpr, a: Null) = List(inNode(expr)(Super(translate[Expr](expr.getClassExpr))))
 
     def visit(expr: UnaryExpr, a: Null) = List(inNode(expr) {
       val (op, fix) = Option(expr.getOperator) match {
@@ -377,7 +408,7 @@ object JavaParser extends Parser {
         case Some(UnaryExpr.Operator.inverse)      => ("~",        false)
         case Some(UnaryExpr.Operator.posIncrement) => ("++",       true)
         case Some(UnaryExpr.Operator.posDecrement) => ("--",       true)
-        case _                                     => (Names.noop, false)
+        case _                                     => (Names.NOOP, false)
       }
       UnaryOp(translate[Expr](expr.getExpr), op, fix)
     })
@@ -394,19 +425,19 @@ object JavaParser extends Parser {
     })
 
     def visit(annot: SingleMemberAnnotationExpr, a: Null) = List(inNode(annot) {
-      Annotation(extractName(annot.getName), Map(Names.default -> translate[Expr](annot.getMemberValue)))
+      Annotation(extractName(annot.getName), Map(Names.DEFAULT -> translate[Expr](annot.getMemberValue)))
     })
 
     def visit(annot: NormalAnnotationExpr, a: Null) = List(inNode(annot) {
       Annotation(extractName(annot.getName), mapSafe(annot.getPairs) { p =>
-        val key = Option(p.getName) getOrElse Names.default
+        val key = Option(p.getName) getOrElse Names.DEFAULT
         val value = translate[Expr](p.getValue)
         key -> value
       }.toMap)
     })
 
     def visit(expr: LambdaExpr, a: Null) = List(inNode(expr) {
-      FunctionLiteral(translateList[ValDef](expr.getParameters), translate[Stmt](expr.getBody))
+      FunctionLiteral(translateList[ValDef](expr.getParameters), Empty[Typ], translate[Stmt](expr.getBody))
     })
 
     def visit(expr: MethodReferenceExpr, a: Null) = List(inNode(expr) {
@@ -423,7 +454,7 @@ object JavaParser extends Parser {
     //- Statements ----------------------------------------
 
     def visit(stmt: ExplicitConstructorInvocationStmt, a: Null) = List(inNode(stmt) {
-      val path = translatePath(translate[Expr](stmt.getExpr))
+      val path = translate[Expr](stmt.getExpr)
       val tparams = translateList[Typ](stmt.getTypeArgs)
       val args = translateList[Expr](stmt.getArgs)
       if (stmt.isThis) ThisCall(path, tparams, args)
@@ -437,7 +468,7 @@ object JavaParser extends Parser {
     })
 
     def visit(stmt: BlockStmt, a: Null) = List(inNode(stmt) {
-      Block(translateList[AST](stmt.getStmts))
+      Block(translateList[Stmt](stmt.getStmts))
     })
 
     def visit(stmt: LabeledStmt, a: Null) = List(inNode(stmt) {
@@ -450,7 +481,7 @@ object JavaParser extends Parser {
 
     def visit(stmt: SwitchStmt, a: Null) = List(inNode(stmt) {
       Switch(translate[Expr](stmt.getSelector), mapSafe(stmt.getEntries) { entry =>
-        val block = translateList[AST](entry.getStmts) match {
+        val block = translateList[Stmt](entry.getStmts) match {
           case list @ (x :: xs) => Block(list).setPos(x.pos)
           case _ => Empty[Block]
         }
@@ -504,10 +535,10 @@ object JavaParser extends Parser {
           val annotations = translateList[Annotation](except.getAnnotations)
 
           val idOpt = Option(except.getId)
-          val name = idOpt.map(id => extractName(id.getName)) getOrElse Names.default
+          val name = idOpt.map(id => extractName(id.getName)) getOrElse Names.DEFAULT
           val arrayCount = idOpt.map(_.getArrayCount) getOrElse 0
           translateList[Typ](except.getTypes).map { tpe =>
-            val finalTpe = arrayType(tpe, arrayCount)
+            val finalTpe = arrayType(tpe, arrayCount, extractPosition(except))
             ValDef(modifiers, name, annotations, finalTpe, Empty[Expr]).setPos(tpe.pos)
           }
         }
