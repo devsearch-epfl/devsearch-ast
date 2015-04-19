@@ -8,7 +8,7 @@ import scala.util.parsing.combinator._
  * Base feature class
  *
  * All features we're going to extract from the ASTs must inherit from this base class. The interface
- * guarantees the presense of a `pos: CodeFilePosition` field that is used to reference the feature
+ * guarantees the presence of a `pos: CodeFilePosition` field that is used to reference the feature
  * source during index lookup. We also require a `key: String` field that is used to actually index
  * upon. This field must identify the feature type in the sense that equality between two features
  * is iff keys are identical.
