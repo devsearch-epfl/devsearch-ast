@@ -159,14 +159,6 @@ case class SuperCall(qualifier: Expr, tparams: List[Type], args: List[Expr]) ext
 /** Assertion statement that will throw an exception if the condition doesn't hold at runtime */
 case class Assert(condition: Expr, message: Expr) extends Statement
 
-/**
- * A flexible block structure
- *
- * We model code blocks as a list of [[Statement]]. Since expressions and definitions are also satetements
- * in our language, this is general enough for any block definition.
- */
-case class Block(statements: List[Statement]) extends Statement with Expr
-
 /** Return statement */
 case class Return(value: Expr) extends Statement
 
@@ -375,6 +367,13 @@ case class ArrayLiteral(tpe: Type, annotations: List[Annotation], dimensions: Li
 case class MultiLiteral(elements: List[Expr]) extends Expr
 
 /**
+ * Map or object literal
+ *
+ * Object literals in javascript or map literals in python fall into this category.
+ */
+case class MapLiteral(elements: List[(String, Expr)]) extends Expr
+
+/**
  * Assignment expression
  *
  * Many languages accept inline assignment and dependent assignments. These are captured in this bin, so we have, for example:
@@ -497,6 +496,14 @@ case class Throw(expr: Expr) extends Expr
  */
 case class Try(tryBlock: Block, catchs: List[(AST, Block)], finallyBlock: Block) extends Expr
 
+/**
+ * A flexible block structure
+ *
+ * We model code blocks as a list of [[Statement]]. Since expressions and definitions are also satetements
+ * in our language, this is general enough for any block definition.
+ */
+case class Block(statements: List[Statement]) extends Expr
+
 
 // -- Helpers -------------------------------------------------------------------------
 
@@ -555,6 +562,7 @@ object Modifiers {
 object Names {
   val DEFAULT = "dft01"
   val NOOP = "$$noop"
+  val REGEXP = "$$regexp"
 
   val OVERRIDE_ANNOTATION = "Override"
   val THROWS_ANNOTATION = "throws"
@@ -567,7 +575,7 @@ object Empty {
   implicit val emptyDefProvider = new EmptyProvider[Definition](NoDef)
   implicit val emptyASTProvider = new EmptyProvider[AST](NoDef)
 
-  object NoType extends Type with Unassignable { override def toString = "NoType" }
+  object NoType extends ClassType(NoExpr, Names.DEFAULT, Nil, Nil) with Unassignable { override def toString = "NoType" }
   implicit val emptyTypeProvider = new EmptyProvider[Type](NoType)
 
   object NoExpr extends Expr with Unassignable { override def toString = "NoExpr" }

@@ -315,6 +315,10 @@ object Operators {
           ArrayLiteral(newTpe, newAnnotations, newDimensions, newElements).fromAST(ast)
         })
 
+      case MapLiteral(elements /*List[(String, Expr)]*/) =>
+        val (keys, values) = elements.unzip
+        (values, asts => MapLiteral(keys zip asts.map(_.asInstanceOf[Expr])).fromAST(ast))
+
       case MultiLiteral(elements /*List[Expr]*/) =>
         (elements, asts => MultiLiteral(asts.map(_.asInstanceOf[Expr])).fromAST(ast))
 
