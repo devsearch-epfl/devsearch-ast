@@ -20,8 +20,8 @@ We currently have parsers for
   holes in the source)
 - Compatibility parser for [DevMine](http://devmine.ch) JSON ASTs that can support any language the DevMine project parses
   (we currently only ship the Go parser)
-
-We also have plans to support Python and JavaScript in a possibly near future.
+- JavaScript 
+We also have plans to support Python in a possibly near future.
 
 ## Feature Extraction
 
