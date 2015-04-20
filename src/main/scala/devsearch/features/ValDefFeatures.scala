@@ -11,6 +11,7 @@ object ValDefFeatures extends FeatureExtractor {
 
   def convertTypeToString(tpe: Type): String = {
     tpe match {
+      case NoType => "NoType"
       case classType: ClassType => classType.name
       case primitiveType: PrimitiveType => primitiveType.getClass.getSimpleName.stripSuffix("$")
       case arrayType: ArrayType => "Array[" + convertTypeToString(arrayType.base) + "]"
@@ -20,7 +21,6 @@ object ValDefFeatures extends FeatureExtractor {
       case BottomType => "Bottom"
       case typeHint: TypeHint => "type hint: " + typeHint.hint
       case complexType: ComplexType => "complex type"
-      case NoType => "NoType"
       case _ => "unknown type"
     }
   }
