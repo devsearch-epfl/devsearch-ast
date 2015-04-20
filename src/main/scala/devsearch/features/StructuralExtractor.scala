@@ -2,7 +2,7 @@ package devsearch.features
 
 import devsearch.ast._
 
-case class ControlFeature(position: CodeFilePosition, ctrl: String) extends Feature(position) {
+case class ControlFeature(position: CodePiecePosition, ctrl: String) extends Feature(position) {
   def key = "controlStatement=" + ctrl
 }
 

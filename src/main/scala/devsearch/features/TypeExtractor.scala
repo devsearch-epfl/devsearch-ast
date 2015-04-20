@@ -2,7 +2,7 @@ package devsearch.features
 
 import devsearch.ast._
 
-case class TypeRefFeature(position: CodeFilePosition, path: String) extends Feature(position) {
+case class TypeRefFeature(position: CodePiecePosition, path: String) extends Feature(position) {
   def key: String = "typeReference=" + path
 }
 

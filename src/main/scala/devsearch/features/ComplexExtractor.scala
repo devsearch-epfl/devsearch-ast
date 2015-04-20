@@ -2,11 +2,11 @@ package devsearch.features
 
 import devsearch.ast._
 
-case class MapCallFeature(position: CodeFilePosition) extends Feature(position) {
+case class MapCallFeature(position: CodePiecePosition) extends Feature(position) {
   def key: String = "map call"
 }
 
-case class FlatMapCallFeature(position: CodeFilePosition) extends Feature(position) {
+case class FlatMapCallFeature(position: CodePiecePosition) extends Feature(position) {
   def key: String = "flatMap call"
 }
 

@@ -3,7 +3,7 @@ package devsearch.features
 import devsearch.ast.Empty.NoType
 import devsearch.ast._
 
-case class TypedVarFeature(position: CodeFilePosition, variableType: String, variableName: String) extends Feature(position) {
+case class TypedVarFeature(position: CodePiecePosition, variableType: String, variableName: String) extends Feature(position) {
   def key: String = "variableDeclaration=" + variableName + " type=" + variableType
 }
 

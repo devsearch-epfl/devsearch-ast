@@ -2,11 +2,11 @@ package devsearch.features
 
 import devsearch.ast._
 
-case class ClassNameFeature(position: CodeFilePosition, name: String) extends Feature(position) {
+case class ClassNameFeature(position: CodePiecePosition, name: String) extends Feature(position) {
   def key: String = "className=" + name
 }
 
-case class InheritanceFeature(position: CodeFilePosition, className: String, superClassName: String) extends Feature(position) {
+case class InheritanceFeature(position: CodePiecePosition, className: String, superClassName: String) extends Feature(position) {
   def key: String = "inheritance=" + className + " from=" + superClassName
 }
 

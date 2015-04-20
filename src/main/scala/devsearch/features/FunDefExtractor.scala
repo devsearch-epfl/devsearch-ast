@@ -2,27 +2,27 @@ package devsearch.features
 
 import devsearch.ast._
 
-case class FunNameFeature(position: CodeFilePosition, name: String) extends Feature(position) {
+case class FunNameFeature(position: CodePiecePosition, name: String) extends Feature(position) {
   def key: String = "functionName=" + name
 }
 
-case class ArgNameFeature(position: CodeFilePosition, name: String) extends Feature(position) {
+case class ArgNameFeature(position: CodePiecePosition, name: String) extends Feature(position) {
   def key: String = "argumentName=" + name
 }
 
-case class ParametricFunFeature(position: CodeFilePosition) extends Feature(position) {
+case class ParametricFunFeature(position: CodePiecePosition) extends Feature(position) {
   def key: String = "function is parametric"
 }
 
-case class AbstractFunFeature(position: CodeFilePosition) extends Feature(position) {
+case class AbstractFunFeature(position: CodePiecePosition) extends Feature(position) {
   def key: String = "abstractFunction"
 }
 
-case class OverridingFunFeature(position: CodeFilePosition) extends Feature(position) {
+case class OverridingFunFeature(position: CodePiecePosition) extends Feature(position) {
   def key: String = "overridingFunction"
 }
 
-case class ThrowsFeature(position: CodeFilePosition, exception: String) extends Feature(position) {
+case class ThrowsFeature(position: CodePiecePosition, exception: String) extends Feature(position) {
   def key: String = "throwsException=" + exception
 }
 
