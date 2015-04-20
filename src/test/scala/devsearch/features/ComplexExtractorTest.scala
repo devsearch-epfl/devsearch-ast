@@ -4,7 +4,7 @@ import devsearch.ast._
 import devsearch.parsers._
 import org.scalatest._
 
-class ComplexFeaturesTest extends FlatSpec {
+class ComplexExtractorTest extends FlatSpec {
   
   "ComplexFeatures" should "find map/flatMap calls in Scala" in {
     val source = new ContentsSource("Test.scala", """
@@ -16,10 +16,10 @@ class ComplexFeaturesTest extends FlatSpec {
     val ast = QueryParser.parse(source)
     val location = CodeFileLocation("unknown_repo", "unknown_user", "Test.scala")
     val code = CodeFileData(location, ast)
-    assert(ComplexFeatures.extract(code) == Set(
-      MapCall(location at 1),
-      MapCall(location at 2),
-      FlatMapCall(location at 3)
+    assert(ComplexExtractor.extract(code) == Set(
+      MapCallFeature(location at 1),
+      MapCallFeature(location at 2),
+      FlatMapCallFeature(location at 3)
     ))
   }
 
@@ -34,8 +34,8 @@ class ComplexFeaturesTest extends FlatSpec {
     val ast = JavaParser.parse(source)
     val location = CodeFileLocation("unknown_repo", "unknown_user", "Test.java")
     val code = CodeFileData(location, ast)
-    assert(ComplexFeatures.extract(code) == Set(
-      MapCall(location at 3)
+    assert(ComplexExtractor.extract(code) == Set(
+      MapCallFeature(location at 3)
     ))
   }
 
@@ -58,9 +58,9 @@ class ComplexFeaturesTest extends FlatSpec {
     val ast = JavaParser.parse(source)
     val location = CodeFileLocation("unknown_user", "unknown_repo", "Test2.java")
     val code = CodeFileData(location, ast)
-    assert(ComplexFeatures.extract(code) == Set(
-      FlatMapCall(location at 3),
-      FlatMapCall(location at 12)
+    assert(ComplexExtractor.extract(code) == Set(
+      FlatMapCallFeature(location at 3),
+      FlatMapCallFeature(location at 12)
     ))
   }
 }

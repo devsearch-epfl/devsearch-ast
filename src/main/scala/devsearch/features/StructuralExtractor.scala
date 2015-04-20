@@ -6,7 +6,7 @@ case class ControlFeature(position: CodeFilePosition, ctrl: String) extends Feat
   def key = "controlStatement=" + ctrl
 }
 
-object StructuralFeatures extends FeatureExtractor {
+object StructuralExtractor extends FeatureExtractor {
   def extract(data: CodeFileData) = data.ast.collect[Feature] {
     case i : If => Set(ControlFeature(data.location at i.pos, "if"))
     case f : Foreach => Set(ControlFeature(data.location at f.pos, "foreach"))

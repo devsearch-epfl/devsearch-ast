@@ -3,11 +3,11 @@ package devsearch.features
 import devsearch.ast.Empty.NoType
 import devsearch.ast._
 
-case class TypedVariable(position: CodeFilePosition, variableType: String, variableName: String) extends Feature(position) {
+case class TypedVarFeature(position: CodeFilePosition, variableType: String, variableName: String) extends Feature(position) {
   def key: String = "variableDeclaration=" + variableName + " type=" + variableType
 }
 
-object ValDefFeatures extends FeatureExtractor {
+object ValDefExtractor extends FeatureExtractor {
 
   def convertTypeToString(tpe: Type): String = {
     tpe match {
@@ -27,7 +27,7 @@ object ValDefFeatures extends FeatureExtractor {
 
   def extract(data: CodeFileData) = data.ast.collect[Feature] {
     case valueDefinition: ValDef if valueDefinition.name != Names.DEFAULT => Set(
-      TypedVariable(data.location at valueDefinition.pos, convertTypeToString(valueDefinition.tpe), valueDefinition.name)
+      TypedVarFeature(data.location at valueDefinition.pos, convertTypeToString(valueDefinition.tpe), valueDefinition.name)
     )
 
     case _ => Set.empty

@@ -75,16 +75,16 @@ trait FeatureExtractor extends java.io.Serializable {
  * from a given code file. This procedure is performed in a framework-agnostic way and it is the
  * job of the caller to parallelize over multiple code files.
  */
-object Features extends (CodeFileData => TraversableOnce[Feature]) with java.io.Serializable {
+object FeatureRecognizer extends (CodeFileData => TraversableOnce[Feature]) with java.io.Serializable {
 
   lazy val extractors = List(
-    ClassDefFeatures,
-    ComplexFeatures,
-    ImportFeatures,
-    StructuralFeatures,
-    FunDefFeatures,
-    TypeFeatures,
-    ValDefFeatures
+    ClassDefExtractor,
+    ComplexExtractor,
+    ImportExtractor,
+    StructuralExtractor,
+    FunDefExtractor,
+    TypeExtractor,
+    ValDefExtractor
   )
 
   def apply(data: CodeFileData) = extractors.flatMap(_.extract(data))
