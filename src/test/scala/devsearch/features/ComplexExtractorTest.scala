@@ -15,7 +15,7 @@ class ComplexExtractorTest extends FlatSpec {
 
     val ast = QueryParser.parse(source)
     val location = CodeFileLocation("unknown_repo", "unknown_user", "Test.scala")
-    val code = CodeFileData(location, ast)
+    val code = new CodeFileData(42, "unknown_language", location, ast)
     assert(ComplexExtractor.extract(code) == Set(
       MapCallFeature(location at 1),
       MapCallFeature(location at 2),
@@ -33,7 +33,7 @@ class ComplexExtractorTest extends FlatSpec {
 
     val ast = JavaParser.parse(source)
     val location = CodeFileLocation("unknown_repo", "unknown_user", "Test.java")
-    val code = CodeFileData(location, ast)
+    val code = new CodeFileData(42, "unknown_language", location, ast)
     assert(ComplexExtractor.extract(code) == Set(
       MapCallFeature(location at 3)
     ))
@@ -57,7 +57,7 @@ class ComplexExtractorTest extends FlatSpec {
 
     val ast = JavaParser.parse(source)
     val location = CodeFileLocation("unknown_user", "unknown_repo", "Test2.java")
-    val code = CodeFileData(location, ast)
+    val code = CodeFileData(42, "unknown_language", location, ast)
     assert(ComplexExtractor.extract(code) == Set(
       FlatMapCallFeature(location at 3),
       FlatMapCallFeature(location at 12)
