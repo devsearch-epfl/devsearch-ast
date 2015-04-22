@@ -2,11 +2,11 @@ package devsearch.features
 
 import devsearch.ast._
 
-case class TypeReference(position: CodeFilePosition, path: String) extends Feature(position) {
+case class TypeRefFeature(position: CodePiecePosition, path: String) extends Feature(position) {
   def key: String = "typeReference=" + path
 }
 
-object TypeFeatures extends FeatureExtractor {
+object TypeExtractor extends FeatureExtractor {
 
   object ReferenceExtractor {
     def unapply(expr: Expr): Option[String] = expr match {
@@ -25,9 +25,9 @@ object TypeFeatures extends FeatureExtractor {
   //       other languages that don't have long paths, like python
   def extract(data: CodeFileData) = data.ast.collect[Feature] {
     case ct @ ClassType(ReferenceExtractor(path), name, _, _) if name != Names.DEFAULT =>
-      Set(TypeReference(data.location at ct.pos, if (path == "") name else path + "." + name))
+      Set(TypeRefFeature(data.location at ct.pos, if (path == "") name else path + "." + name))
     case i @ Import(name, _, _) if name != Names.DEFAULT =>
-      Set(TypeReference(data.location at i.pos, name))
+      Set(TypeRefFeature(data.location at i.pos, name))
     case _ => Set.empty
   }
 }

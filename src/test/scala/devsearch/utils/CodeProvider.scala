@@ -16,6 +16,6 @@ object CodeProvider {
     val fileURL = getClass.getResource("/samples/JavaConcepts.java")
     val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
 
-    CodeFileData(location, JavaParser.parse(filePath))
+    CodeFileData(42, "unknown_language", location, JavaParser.parse(filePath))
   }
 }

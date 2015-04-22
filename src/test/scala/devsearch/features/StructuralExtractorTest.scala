@@ -3,10 +3,10 @@ package devsearch.features
 import devsearch.utils._
 import org.scalatest._
 
-class StructuralFeaturesTest extends FlatSpec with CodeProvider {
+class StructuralExtractorTest extends FlatSpec with CodeProvider {
 
   "Structural features" should "be found in JavaConcepts.java" in {
-    assert(StructuralFeatures.extract(code) == Set(
+    assert(StructuralExtractor.extract(code) == Set(
       ControlFeature(location at 248, "if"),
       ControlFeature(location at 268, "if"),
       ControlFeature(location at 280, "if"),
@@ -27,7 +27,7 @@ class StructuralFeaturesTest extends FlatSpec with CodeProvider {
 
 
   it should "toString correctly" in {
-    val features = StructuralFeatures.extract(code)
+    val features = StructuralExtractor.extract(code)
     assert(features == features.map { f => Feature.parse(f.encode) })
   }
 }

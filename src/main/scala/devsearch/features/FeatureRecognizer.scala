@@ -17,7 +17,7 @@ import scala.util.parsing.combinator._
  * `key, location, line` where each field is encoded with the URI scheme to make sure we can split
  * on '\n' and ',' during index parsing.
  */
-abstract class Feature(val pos: CodeFilePosition) extends java.io.Serializable {
+abstract class Feature(val pos: CodePiecePosition) extends java.io.Serializable {
   def key: String
 
   /**
@@ -45,7 +45,7 @@ object Feature {
     val (user :: repo :: pathList) = new java.net.URI(location).getPath.split("/").toList
     val fileName = pathList.mkString("/")
     val featureKey = new java.net.URI(key).getPath
-    val featurePosition = CodeFilePosition(CodeFileLocation(user, repo, fileName), line.toInt)
+    val featurePosition = CodePiecePosition(CodeFileLocation(user, repo, fileName), line.toInt)
 
     new Feature(featurePosition) {
       def key = featureKey
@@ -75,35 +75,47 @@ trait FeatureExtractor extends java.io.Serializable {
  * from a given code file. This procedure is performed in a framework-agnostic way and it is the
  * job of the caller to parallelize over multiple code files.
  */
-object Features extends (CodeFileData => TraversableOnce[Feature]) with java.io.Serializable {
+object FeatureRecognizer extends (CodeFileData => TraversableOnce[Feature]) with java.io.Serializable {
 
   lazy val extractors = List(
-    ClassDefFeatures,
-    ComplexFeatures,
-    ImportFeatures,
-    StructuralFeatures,
-    FunDefFeatures,
-    TypeFeatures,
-    ValDefFeatures
+    ClassDefExtractor,
+    ComplexExtractor,
+    ImportExtractor,
+    StructuralExtractor,
+    FunDefExtractor,
+    TypeExtractor,
+    ValDefExtractor
   )
 
   def apply(data: CodeFileData) = extractors.flatMap(_.extract(data))
 }
 
 case class CodeFileLocation(user: String, repoName: String, fileName: String) extends java.io.Serializable {
-  def at(pos: Position) = CodeFilePosition(this, pos.line)
-  def at(line: Int) = CodeFilePosition(this, line)
+  def at(pos: Position) = CodePiecePosition(this, pos.line)
+  def at(line: Int) = CodePiecePosition(this, line)
   override def toString = user + "/" + repoName + "/" + fileName
 }
 
-case class CodeFilePosition(location: CodeFileLocation, line: Int) extends java.io.Serializable {
+case class CodePiecePosition(location: CodeFileLocation, line: Int) extends java.io.Serializable {
   override def toString = location.toString + ":" + line
 }
 
-case class CodeFileData(location: CodeFileLocation, ast: AST) extends java.io.Serializable
+case class CodeFileData(size: Long, language: String, location: CodeFileLocation, ast: AST) extends java.io.Serializable
 
 object CodeFileData {
-  def apply(location: CodeFileLocation, parser: Parser, source: String): CodeFileData =
-    CodeFileData(location, scala.util.Try(parser.parse(new ContentsSource(location.fileName, source))) getOrElse Empty[AST])
+  def apply(size: Long, language: String, location: CodeFileLocation, source: String): CodeFileData = {
+    val parser = language match {
+      case "Java" => JavaParser
+      case "Go" => GoParser
+      case "Scala" => QueryParser
+    }
+
+    new CodeFileData(
+      size, language, location,
+      scala.util.Try(
+        parser.parse(new ContentsSource(location.fileName, source))
+      ) getOrElse Empty[AST]
+    )
+  }
 }
 

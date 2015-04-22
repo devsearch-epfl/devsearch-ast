@@ -2,15 +2,15 @@ package devsearch.features
 
 import devsearch.ast._
 
-case class MapCall(position: CodeFilePosition) extends Feature(position) {
+case class MapCallFeature(position: CodePiecePosition) extends Feature(position) {
   def key: String = "map call"
 }
 
-case class FlatMapCall(position: CodeFilePosition) extends Feature(position) {
+case class FlatMapCallFeature(position: CodePiecePosition) extends Feature(position) {
   def key: String = "flatMap call"
 }
 
-object ComplexFeatures extends FeatureExtractor {
+object ComplexExtractor extends FeatureExtractor {
 
   def extract(data: CodeFileData) = {
     var features = Set.empty[Feature]
@@ -29,31 +29,31 @@ object ComplexFeatures extends FeatureExtractor {
     val complexTraverser = new Traverser {
       override def traverse(ast: AST): Unit = ast match {
         case fc @ FunctionCall(Ident("map"), _, List(f)) =>
-          features += MapCall(data.location at fc.pos)
+          features += MapCallFeature(data.location at fc.pos)
           super.traverse(fc)
 
         case fc @ FunctionCall(Ident("flatMap"), _, List(f)) =>
-          features += FlatMapCall(data.location at fc.pos)
+          features += FlatMapCallFeature(data.location at fc.pos)
           super.traverse(fc)
 
         case fc @ FunctionCall(FieldAccess(_, "map", _), _, List(f)) =>
-          features += MapCall(data.location at fc.pos)
+          features += MapCallFeature(data.location at fc.pos)
           super.traverse(fc)
 
         case fc @ FunctionCall(FieldAccess(_, "flatMap", _), _, List(f)) =>
-          features += FlatMapCall(data.location at fc.pos)
+          features += FlatMapCallFeature(data.location at fc.pos)
           super.traverse(fc)
 
         case fc @ FunctionCall(FieldAccess(Ident(name), "add", _), _, List(elem)) =>
           lookup(name) match {
-            case Some(ast) if ast == stack.head._1 => features += MapCall(data.location at ast.pos)
-            case Some(ast) => features += FlatMapCall(data.location at ast.pos)
+            case Some(ast) if ast == stack.head._1 => features += MapCallFeature(data.location at ast.pos)
+            case Some(ast) => features += FlatMapCallFeature(data.location at ast.pos)
             case _ =>
           }
           super.traverse(fc)
 
         case fc @ FunctionCall(FieldAccess(Ident(name), "addAll", _), _, List(elem)) =>
-          features += FlatMapCall(data.location at ast.pos)
+          features += FlatMapCallFeature(data.location at ast.pos)
           super.traverse(fc)
 
         case _ : Foreach | _ : For =>
