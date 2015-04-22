@@ -31,9 +31,9 @@ position (user/repo/path:line) that can then be used to build feature indexes an
 a feature is simply a key with a well-defined equality function along with the position in the AST at which it was extracted:
 ```scala
 trait Feature {
-  def pos: CodeFilePosition
+  def pos: CodePiecePosition
   def key: String
 }
 ```
 
-We provide a helper object `Features` that can be used to extract all features from a given AST through `apply(ast: AST)`.
+We provide a helper object `FeatureRecognizer` that can be used to extract all features from a given AST through `apply(ast: AST)`.
