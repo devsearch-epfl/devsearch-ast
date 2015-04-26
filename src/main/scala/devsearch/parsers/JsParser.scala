@@ -8,7 +8,7 @@ import scala.util.parsing.combinator._
 
 object JsParser extends Parser {
 
-  def language = "JavaScript"
+  def language = Languages.JavaScript
 
   def parse(source: Source) = new SourceParser(source).parse
 

@@ -12,7 +12,7 @@ import org.scalamacros.paradise.quasiquotes._
 
 object QueryParser extends Parser {
 
-  def language = "Scala"
+  def language = Languages.Scala
 
   private lazy val compiler = {
     val settings = new scala.tools.nsc.Settings

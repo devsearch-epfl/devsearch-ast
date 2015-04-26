@@ -105,9 +105,10 @@ case class CodeFileData(size: Long, language: String, location: CodeFileLocation
 object CodeFileData {
   def apply(size: Long, language: String, location: CodeFileLocation, source: String): CodeFileData = {
     val parser = language match {
-      case "Java" => JavaParser
-      case "Go" => GoParser
-      case "Scala" => QueryParser
+      case Languages.Go => GoParser
+      case Languages.Java => JavaParser
+      case Languages.JavaScript => JsParser
+      case Languages.Scala => QueryParser
     }
 
     new CodeFileData(

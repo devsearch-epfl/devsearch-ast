@@ -8,7 +8,7 @@ import devsearch.ast._
 import Modifiers._
 
 object GoParser extends DevMineParser("parser-go") {
-  def language = "Go"
+  def language = Languages.Go
 }
 
 abstract class DevMineParser(parserPath: String) extends Parser {
