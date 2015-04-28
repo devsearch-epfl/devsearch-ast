@@ -1,5 +1,6 @@
 package devsearch.parsers
 
+import devsearch.utils.CodeProvider
 import org.scalatest._
 import devsearch.ast._
 import devsearch.ast.Empty._
@@ -1005,9 +1006,8 @@ class ScalaParserTest extends FunSuite with ParserTest {
    * Test on a specific file that failed on Spark
    */
   def checkInfLoopFile(): Unit = {
-    val fileURL = getClass.getResource("/samples/UI.scala")
-    val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
-    assert(QueryParser.parse(filePath) != NoDef)
+    val uiFilePath = CodeProvider.absResourcePath("/samples/UI.scala")
+    assert(QueryParser.parse(uiFilePath) != NoDef)
   }
 
   checkInfLoopFile()

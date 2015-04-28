@@ -3,6 +3,7 @@ package devsearch.parsers
 import devsearch.ast._
 import devsearch.ast.Modifiers._
 import devsearch.ast.Empty._
+import devsearch.utils.CodeProvider
 import org.scalatest._
 
 class JsParserTest extends FunSuite {
@@ -426,9 +427,11 @@ class JsParserTest extends FunSuite {
    * Test on a specific file that failed on Spark
    */
   def checkInfLoopFile(): Unit = {
-    val fileURL = getClass.getResource("/samples/event.js")
-    val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
-    assert(JsParser.parse(filePath) != NoDef)
+    val eventFilePath = CodeProvider.absResourcePath("/samples/event.js")
+    assert(JsParser.parse(eventFilePath) != NoDef)
+
+    val fckFilePath = CodeProvider.absResourcePath("/samples/fcktextcolorcommand.js")
+    assert(JsParser.parse(fckFilePath) != NoDef)
   }
 
   checkInfLoopFile()

@@ -9,6 +9,10 @@ trait CodeProvider {
 }
 
 object CodeProvider {
+  def absResourcePath(path: String): String = {
+    val fileURL = getClass.getResource(path)
+    new java.io.File(fileURL.toURI).getAbsolutePath
+  }
 
   lazy val location = CodeFileLocation("unknown_user", "unknown_repo", "JavaConcepts.java")
 
