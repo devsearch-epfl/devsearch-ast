@@ -766,8 +766,9 @@ object QueryParser extends Parser {
           case Try(block, catches, finalizer) =>
             ast.Try(wrapStatements(extractStmts(block), pos), catches.map { case c @ CaseDef(pat, guard, body) =>
               val guarded = ast.Guarded(extractExpr(pat), extractExpr(guard)).setPos(extractPosition(c.pos))
+              val valDef = ast.ExtractionValDef(ast.Modifiers.NoModifiers, guarded, Nil, ast.Empty.NoExpr).setPos(guarded.pos)
               val block = wrapStatements(extractStmts(body), extractPosition(c.pos))
-              guarded -> block
+              valDef -> block
             }, wrapStatements(extractStmts(finalizer), pos))
 
           case Function(vparams, body) =>

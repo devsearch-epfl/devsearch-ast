@@ -81,7 +81,7 @@ object ComplexExtractor extends FeatureExtractor {
       }
     }
 
-    complexTraverser.traverse(data.ast)
+    complexTraverser(data.ast)
 
     features
   }

@@ -5,6 +5,15 @@ import Empty._
 
 object Operators {
 
+  /** Typical foreach iteration on a tree structure. */
+  def foreach(f: AST => Unit)(ast: AST): Unit = {
+    val rec = foreach(f) _
+    val (children, _) = unapply(ast)
+
+    f(ast)
+    children.foreach(rec)
+  }
+
   /**
    * Typical foldRight function on tree structures. The function receives the results of being applied on
    * all the trees children as a second parameter.
@@ -430,9 +439,38 @@ object Operators {
   }
 }
 
+/**
+ * Simple traverser class
+ *
+ * Useful when traversal needs to maintain complex state that cannot easily be
+ * encoded into [[Operators.foldRight]].
+ */
 class Traverser {
-  def traverse(ast: AST): Unit = {
+  def apply(ast: AST): Unit = traverse(ast)
+
+  protected def traverse(ast: AST): Unit = {
     val (children, _) = Operators.unapply(ast)
     children.foreach(traverse)
+  }
+}
+
+/**
+ * Simple transformer class
+ *
+ * Useful when transformation needs state information that cannot be encoded
+ * when using the [[Operators.postMap]] function.
+ */
+class Transformer {
+  def apply(ast: AST): AST = transform(ast)
+
+  protected def transform(ast: AST): AST = {
+    val (children, builder) = Operators.unapply(ast)
+    val newChildren = children.map(transform)
+
+    if ((children zip newChildren).exists { case (c, nc) => c ne nc }) {
+      builder(newChildren)
+    } else {
+      ast
+    }
   }
 }

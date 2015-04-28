@@ -6,10 +6,11 @@ import devsearch.ast.Empty._
 import devsearch.utils.CodeProvider
 import org.scalatest._
 
-class JsParserTest extends FunSuite {
+class JsParserTest extends FunSuite with ParserTest {
 
   def check(str: String, description: String): Unit = test(description) {
-    JsParser.parse(new ContentsSource("NoFile", str))
+    val ast = JsParser.parse(new ContentsSource("NoFile", str))
+    checkPositions(ast)
   }
 
   check("var abc;", "Regular variable statement w/o assignment")
