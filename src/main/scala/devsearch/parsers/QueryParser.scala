@@ -663,6 +663,10 @@ object QueryParser extends Parser {
               ast.Import(path, asterisk, true)
             }
 
+          case build.SyntacticFor(_, _) => List(extractExpr(tree))
+
+          case build.SyntacticForYield(_, _) => List(extractExpr(tree))
+
           case Apply(fun, args) => List(extractExpr(fun) match {
             case a @ ast.FieldAccess(s @ ast.Super(qual), nme.CONSTRUCTOR, tparams) =>
               val call = ast.SuperCall(qual, tparams, args.map(extractExpr)).fromAST(a)
@@ -672,7 +676,7 @@ object QueryParser extends Parser {
               val call = ast.ThisCall(qual, tparams, args.map(extractExpr)).fromAST(a)
               s.comment.foreach(call.appendComment)
               call
-            case _ => extractExpr(tree)
+            case caller => extractApply(caller, args.map(extractExpr))
           })
 
           case LabelDef(nm1, _, ife @ If(cond, Block(stats, Apply(Ident(nm2), Nil)), _)) if nm1 == nm2 =>
@@ -708,6 +712,14 @@ object QueryParser extends Parser {
         }
 
         extracted.map(_.setPos(pos))
+      }
+
+      def extractApply(fun: ast.Expr, args: List[ast.Expr]): ast.Expr = fun match {
+        case a @ ast.FieldAccess(cc : ast.ConstructorCall, "<init>", tparams) =>
+          cc.copy(args = cc.args ++ args).fromAST(cc).fromAST(a)
+        case a @ ast.FieldAccess(receiver, name, tparams) =>
+          ast.FunctionCall(ast.FieldAccess(receiver, name, Nil).fromAST(a), tparams, args)
+        case caller => ast.FunctionCall(caller, Nil, args)
       }
 
       def extractExpr(tree: Tree): ast.Expr = {
@@ -778,13 +790,7 @@ object QueryParser extends Parser {
 
           case build.SyntacticForYield(enums, body) => extractFors(enums, extractExpr(body), true)
 
-          case Apply(fun, args) => extractExpr(fun) match {
-            case a @ ast.FieldAccess(cc : ast.ConstructorCall, "<init>", tparams) =>
-              cc.copy(args = cc.args ++ args.map(extractExpr)).fromAST(cc).fromAST(a)
-            case a @ ast.FieldAccess(receiver, name, tparams) =>
-              ast.FunctionCall(ast.FieldAccess(receiver, name, Nil).fromAST(a), tparams, args.map(extractExpr))
-            case caller => ast.FunctionCall(caller, Nil, args.map(extractExpr))
-          }
+          case Apply(fun, args) => extractApply(extractExpr(fun), args.map(extractExpr))
 
           case TypeApply(fun, args) =>
             val tpArgs = args.map(extractType)
