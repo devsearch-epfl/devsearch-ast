@@ -16,7 +16,7 @@ class Namer(splitter: String = "") {
 
   def fresh(name: String): String = {
     var counter = nameCounters.getOrElseUpdate(name, 0)
-    var freshName = name + splitter + (if (counter == 0) "" else counter.toString)
+    var freshName = name + splitter + (if (counter == 0 && splitter == "") "" else counter.toString)
     while (nameCounters.isDefinedAt(freshName)) {
       counter += 1
       freshName = name + splitter + counter

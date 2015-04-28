@@ -15,28 +15,28 @@ trait FunctionDefinition extends CodeDefinition {
   def params: List[(Identifier, Type)]
 }
 
-trait Extraction extends ControlFlowGraphs { self =>
+trait AstExtraction extends ControlFlowGraphs { self =>
 
   def mkNode = new Node
   class Node extends devsearch.normalized.Node {
-    private[Extraction] var _statements: List[Statement] = Nil
+    private[AstExtraction] var _statements: List[Statement] = Nil
     def statements: List[Statement] = _statements
 
-    private[Extraction] var _locked: Boolean = false
+    private[AstExtraction] var _locked: Boolean = false
     def locked: Boolean = _locked
-    private[Extraction] def lock: this.type = {
+    private[AstExtraction] def lock: this.type = {
       _locked = true
       this
     }
 
-    private[Extraction] def add(stmt: Statement): this.type = {
+    private[AstExtraction] def add(stmt: Statement): this.type = {
       if(!locked) _statements :+= stmt
       this
     }
 
-    private[Extraction] var _result: Value = Literal("null")
+    private[AstExtraction] var _result: Value = Literal("null")
     def result: Value = _result
-    private[Extraction] def setResult(result: Value): this.type = {
+    private[AstExtraction] def setResult(result: Value): this.type = {
       if (!locked) _result = result
       this
     }
@@ -53,7 +53,7 @@ trait Extraction extends ControlFlowGraphs { self =>
   ) extends devsearch.normalized.Definition {
     private var _defs: List[Definition] = Nil
     def definitions: List[Definition] = _defs
-    private[Extraction] def add(definition: Definition): Unit = { _defs :+= definition }
+    private[AstExtraction] def add(definition: Definition): Unit = { _defs :+= definition }
   }
 
   class CodeDefinition(
@@ -76,7 +76,7 @@ trait Extraction extends ControlFlowGraphs { self =>
     // programmatically generated during code transformation
     val namer = new Namer("$")
 
-    type Assignable = Either[(Identifier, String), Identifier]
+    type Assignable = Either[(Value, String), Identifier]
 
     def assign(node: Node, optAssign: Option[Assignable], expr: Expr): Node = optAssign match {
       case Some(Left((id, name))) => expr match {
@@ -101,7 +101,7 @@ trait Extraction extends ControlFlowGraphs { self =>
     def emptyOrNew(node: Node)(implicit scope: Scope { type Def <: CodeDefinition }): Node = {
       if (node.statements.isEmpty && scope.definition.graph.next(node).isEmpty) node else {
         val n = newNode
-        connect(node, n)
+        connect(node, n, "setup-cond")
         n
       }
     }
@@ -109,7 +109,7 @@ trait Extraction extends ControlFlowGraphs { self =>
     def toResult(node: Node)(implicit scope: Scope { type Def <: CodeDefinition }): Node = {
       if (node.result == Identifier("$noResult")) {
         val previous = scope.definition.graph.prev(node).collect {
-          case Edge(p, _, _) if !p.locked => toResult(p).result
+          case Edge(p, _, _, _) if !p.locked => toResult(p).result
         }
 
         if (previous.isEmpty) {
@@ -125,8 +125,9 @@ trait Extraction extends ControlFlowGraphs { self =>
 
     def newNode(implicit scope: Scope { type Def <: CodeDefinition }): Node = scope.definition.graph.newNode
 
-    def connect(n1: Node, n2: Node, guard: Option[(Value, Boolean)] = None)(implicit scope: Scope { type Def <: CodeDefinition }) = {
-      scope.definition.graph.connect(n1, n2, guard)
+    def connect(n1: Node, n2: Node, reason: String, guard: Option[(Value, Boolean)] = None)
+               (implicit scope: Scope { type Def <: CodeDefinition }) = {
+      scope.definition.graph.connect(n1, n2, reason, guard)
     }
 
     trait Scope {
@@ -136,32 +137,39 @@ trait Extraction extends ControlFlowGraphs { self =>
       def loopCondition: Node
       def catchStart: Node
       def definition: Def
-      def namedScope(name: String): Scope
+      def named: List[(String, Option[Scope])]
+
+      def namedScope(name: String): Scope = named.find(_._1 == name).map(_._2).flatten.getOrElse {
+        throw NormalizationError("Can't access named scope outside of parent loop")
+      }
 
       def inLoop(cond: Node, end: Node) = new Scope {
         type Def = Scope.this.Def
         val loopEnd: Node = end
         val loopCondition: Node = cond
-        val catchStart: Node = Scope.this.catchStart
-        val definition: Def = Scope.this.definition
-        def namedScope(name: String): Scope = Scope.this.namedScope(name)
+        lazy val catchStart: Node = Scope.this.catchStart
+        lazy val definition: Def = Scope.this.definition
+        val named: List[(String, Option[Scope])] = Scope.this.named match {
+          case (name, None) :: scopes => (name, Some(this)) :: scopes
+          case scopes => scopes
+        }
       }
 
       def inTry(catchs: Node) = new Scope {
         type Def = Scope.this.Def
-        val loopEnd: Node = Scope.this.loopEnd
-        val loopCondition: Node = Scope.this.loopCondition
+        lazy val loopEnd: Node = Scope.this.loopEnd
+        lazy val loopCondition: Node = Scope.this.loopCondition
         val catchStart: Node = catchs
-        val definition: Def = Scope.this.definition
-        def namedScope(name: String): Scope = Scope.this.namedScope(name)
+        lazy val definition: Def = Scope.this.definition
+        val named: List[(String, Option[Scope])] = Scope.this.named
       }
 
       def inClass(n: String) = new Scope {
         type Def = Definition
-        val loopEnd: Node = Scope.this.loopEnd
-        val loopCondition: Node = Scope.this.loopCondition
+        lazy val loopEnd: Node = Scope.this.loopEnd
+        lazy val loopCondition: Node = Scope.this.loopCondition
         def catchStart: Node = throw NormalizationError("Can't throw exceptions in class definition!")
-        def namedScope(name: String): Scope = Scope.this.namedScope(name)
+        val named: List[(String, Option[Scope])] = Scope.this.named
 
         val definition: Def = {
           val newDef = new Definition(n)
@@ -172,9 +180,9 @@ trait Extraction extends ControlFlowGraphs { self =>
 
       def inDef(n: String, params: List[(Identifier, Type)]) = new Scope {
         type Def = CodeDefinition
-        val loopEnd: Node = Scope.this.loopEnd
-        val loopCondition: Node = Scope.this.loopCondition
-        def namedScope(name: String): Scope = Scope.this.namedScope(name)
+        lazy val loopEnd: Node = Scope.this.loopEnd
+        lazy val loopCondition: Node = Scope.this.loopCondition
+        val named: List[(String, Option[Scope])] = Scope.this.named
 
         val definition: Def = {
           val newDef = new FunctionDefinition(n, params)
@@ -188,13 +196,11 @@ trait Extraction extends ControlFlowGraphs { self =>
       def withNamed(nme: String) = new Scope {
         type Def = Scope.this.Def
 
-        val loopEnd: Node = Scope.this.loopEnd
-        val loopCondition: Node = Scope.this.loopCondition
-        val catchStart: Node = Scope.this.catchStart
-        val definition: Def = Scope.this.definition
-
-        val outer = Scope.this
-        def namedScope(name: String): Scope = if (name == nme) outer else outer.namedScope(name)
+        lazy val loopEnd: Node = Scope.this.loopEnd
+        lazy val loopCondition: Node = Scope.this.loopCondition
+        lazy val catchStart: Node = Scope.this.catchStart
+        lazy val definition: Def = Scope.this.definition
+        val named: List[(String, Option[Scope])] = (nme -> None) :: Scope.this.named
       }
     }
 
@@ -203,9 +209,9 @@ trait Extraction extends ControlFlowGraphs { self =>
         type Def = CodeDefinition
         def loopEnd: Node = throw NormalizationError("Can't access loopEnd outside of loop")
         def loopCondition: Node = throw NormalizationError("Cann't access loopCondition outside of loop")
-        def namedScope(name: String): Scope = throw NormalizationError("Can't access named scope outside of named block")
         val definition = new CodeDefinition("$program")
         val catchStart: Node = definition.graph.lastNode
+        val named: List[(String, Option[Scope])] = Nil
       }
     }
 
@@ -218,9 +224,11 @@ trait Extraction extends ControlFlowGraphs { self =>
       case _ => UnknownType
     }
 
-    def recStmt(current: Node, stmt: ast.Statement)(implicit scope: Scope { type Def <: CodeDefinition }): Node = recStmts(current, stmt :: Nil)
+    def recStmt(current: Node, stmt: ast.Statement)(implicit scope: Scope { type Def <: CodeDefinition }): Node = recStmts(current, stmt :: Nil)(scope)
 
     def recStmts(current: Node, stmts: List[ast.Statement])(implicit scope: Scope { type Def <: CodeDefinition }): Node = stmts match {
+      case Nil => current
+
       case ast.NamedStatement(name, stmt) :: rest =>
         recStmts(current, stmt :: rest)(scope.withNamed(name))
 
@@ -228,28 +236,28 @@ trait Extraction extends ControlFlowGraphs { self =>
         val condHead = emptyOrNew(current)
         val condLast = recExpr(condHead, cond)
 
-        val restHead = new Node
+        val restHead = newNode
         val restLast = recStmts(restHead, rest)
-        connect(condLast, restHead, Some(condLast.result -> false))
+        connect(condLast, restHead, "while-false", Some(condLast.result -> false))
 
-        val bodyHead = new Node
+        val bodyHead = newNode
         val bodyLast = recStmt(bodyHead, body)(scope.inLoop(condHead, restHead))
-        connect(condLast, bodyHead, Some(condLast.result -> true))
-        connect(bodyLast, condHead)
+        connect(condLast, bodyHead, "while-true", Some(condLast.result -> true))
+        connect(bodyLast, condHead, "while-body-cond")
         restLast
 
       case ast.Do(cond, body) :: rest =>
-        val condHead = new Node
+        val condHead = newNode
         val condLast = recExpr(condHead, cond)
 
-        val restHead = new Node
+        val restHead = newNode
         val restLast = recStmts(restHead, rest)
-        connect(condLast, restHead, Some(condLast.result -> false))
+        connect(condLast, restHead, "do-false", Some(condLast.result -> false))
 
         val bodyHead = emptyOrNew(current)
         val bodyLast = recStmt(bodyHead, body)(scope.inLoop(condHead, restHead))
-        connect(bodyLast, condHead)
-        connect(condLast, bodyHead, Some(condLast.result -> true))
+        connect(bodyLast, condHead, "do-body-cond")
+        connect(condLast, bodyHead, "do-true", Some(condLast.result -> true))
         restLast
 
       case ast.Break(label) :: rest => // rest is dead code!
@@ -257,7 +265,7 @@ trait Extraction extends ControlFlowGraphs { self =>
           case Some(name) => scope.namedScope(name)
           case None => scope
         }
-        connect(current, targetScope.loopEnd)
+        connect(current, targetScope.loopEnd, "break")
         current.lock
 
       case ast.Continue(label) :: rest => // rest is dead code!
@@ -265,7 +273,7 @@ trait Extraction extends ControlFlowGraphs { self =>
           case Some(name) => scope.namedScope(name)
           case None => scope
         }
-        connect(current, targetScope.loopCondition)
+        connect(current, targetScope.loopCondition, "continue")
         current.lock
 
       case ast.For(vals, inits, cond, updates, body) :: rest =>
@@ -274,81 +282,88 @@ trait Extraction extends ControlFlowGraphs { self =>
         val condHead = emptyOrNew(initLast)
         val condLast = recExpr(condHead, cond)
 
-        val restHead = new Node
+        val restHead = newNode
         val restLast = recStmts(restHead, rest)
-        connect(condLast, restHead, Some(condLast.result -> false))
+        connect(condLast, restHead, "for-false", Some(condLast.result -> false))
 
-        val bodyHead = new Node
-        val bodyLast = recStmts(bodyHead, body :: updates)(scope.inLoop(condHead, restHead))
-        connect(condLast, bodyHead, Some(condLast.result -> true))
-        connect(bodyLast, condHead)
+        val updatesHead = newNode
+        val nscope = scope.inLoop(updatesHead, restHead)
+        val updatesLast = recStmts(updatesHead, updates)(nscope)
+        connect(updatesLast, condHead, "for-updates-cond")
+
+        val bodyHead = newNode
+        val bodyLast = recStmt(bodyHead, body)(nscope)
+        connect(condLast, bodyHead, "for-true", Some(condLast.result -> true))
+        connect(bodyLast, updatesHead, "for-body-updates")
         restLast
 
       case ast.Return(expr) :: rest => // rest is dead code!
         val retLast = recExpr(current, expr)
-        connect(retLast, scope.definition.graph.lastNode)
+        connect(retLast, scope.definition.graph.lastNode, "return")
         retLast.lock
 
       case ast.If(cond, thenn, elze) :: rest =>
         val condLast = recExpr(current, cond)
 
-        val thenHead = new Node
+        val thenHead = newNode
         val thenLast = recStmt(thenHead, thenn)
-        connect(condLast, thenHead, Some(condLast.result -> true))
+        connect(condLast, thenHead, "if-true", Some(condLast.result -> true))
 
-        val elseHead = new Node
+        val elseHead = newNode
         val elseLast = recStmt(elseHead, elze)
-        connect(condLast, elseHead, Some(condLast.result -> false))
+        connect(condLast, elseHead, "if-false", Some(condLast.result -> false))
 
-        val restHead = new Node
+        val restHead = newNode
         val restLast = recStmts(restHead, rest)
-        connect(thenLast, restHead)
-        connect(elseLast, restHead)
+        connect(thenLast, restHead, "if-true-join")
+        connect(elseLast, restHead, "if-false-join")
         restLast
 
       case ast.Switch(selector, entries) :: rest =>
         val selLast = recExpr(current, selector)
         val selID = selLast.result
 
-        val restHead = new Node
+        val restHead = newNode
+        val nscope = scope.inLoop(restHead, restHead)
         entries.foreach { case (guard, block) =>
-          val guardHead = new Node
+          val guardHead = newNode
           val guardedNode = recPattern(guardHead, guard, selID)
-          connect(selLast, guardHead)
+          connect(selLast, guardHead, "switch-guard")
 
-          val blockLast = recStmt(guardedNode, block)(scope.inLoop(restHead, restHead))
-          connect(blockLast, restHead)
+          val blockLast = recStmt(guardedNode, block)(nscope)
+          connect(blockLast, restHead, "switch-join")
         }
 
+        if (entries.isEmpty) connect(selLast, restHead, "switch-empty")
         recStmts(restHead, rest)
 
       case ast.Foreach(vals, iterable, body, _) :: rest =>
         val iterLast = recExpr(current, iterable)
         val it = iterLast.result
 
-        val condNode = new Node
+        val condNode = newNode
         assign(condNode, None, Field(it, "hasNext"))
         assign(condNode, None, Call(condNode.result, Seq.empty))
-        connect(iterLast, condNode)
+        connect(iterLast, condNode, "foreach-cond")
 
-        val restHead = new Node
+        val restHead = newNode
         val restLast = recStmts(restHead, rest)
-        connect(condNode, restHead, Some(condNode.result -> false))
+        connect(condNode, restHead, "foreach-false", Some(condNode.result -> false))
 
-        val bodyHead = new Node
+        val bodyHead = newNode
         val bodyLast = recStmt(bodyHead, body)(scope.inLoop(condNode, restHead))
-        connect(condNode, bodyHead, Some(condNode.result -> true))
-        connect(bodyLast, condNode)
+        connect(condNode, bodyHead, "foreach-true", Some(condNode.result -> true))
+        connect(bodyLast, condNode, "foreach-body-cond")
         restLast
 
       case ast.Try(tryBlock, catchs, finallyBlock) :: rest =>
-        val finallyHead = new Node
+        val finallyHead = newNode
         val finallyLast = recStmt(finallyHead, finallyBlock)
         val restLast = recStmts(finallyLast, rest)
 
-        val catchsNode = new Node
+        val catchsNode = newNode
         val tryLast = recStmt(current, tryBlock)(scope.inTry(catchsNode))
-        connect(tryLast, catchsNode)
+        connect(tryLast, catchsNode, "catch-node")
 
         catchs.foreach { case (catcher, block) =>
           val (optId, tpe, guard) = catcher match {
@@ -360,19 +375,19 @@ trait Extraction extends ControlFlowGraphs { self =>
 
           val id = assign(catchsNode, optId, Catch(tpe)).result
 
-          val catchHead = new Node
+          val catchHead = newNode
           val catchLast = recPattern(catchHead, guard, id)
-          connect(catchsNode, catchHead, Some(id -> true))
+          connect(catchsNode, catchHead, "catch-guard", Some(id -> true))
 
           val bodyLast = recStmt(catchLast, block)
-          connect(bodyLast, finallyHead)
+          connect(bodyLast, finallyHead, "catch-join")
         }
         restLast
 
       case ast.Throw(expr) :: rest => // rest is dead code
         val throwLast = recExpr(current, expr)
         throwLast.add(Throw(throwLast.result))
-        connect(throwLast, scope.catchStart)
+        connect(throwLast, scope.catchStart, "throw")
         throwLast.lock
 
       case ast.ValDef(_, name, _, _, expr, _) :: rest =>
@@ -389,15 +404,15 @@ trait Extraction extends ControlFlowGraphs { self =>
 
       case ast.Assert(expr, msg) :: rest =>
         val lastExpr = recExpr(current, expr)
-        val failHead = new Node
+        val failHead = newNode
         val failLast = recExpr(failHead, msg)
         failLast.add(Throw(failLast.result))
-        connect(lastExpr, failHead, Some(lastExpr.result -> false))
-        connect(failLast, scope.catchStart)
+        connect(lastExpr, failHead, "assert-false", Some(lastExpr.result -> false))
+        connect(failLast, scope.catchStart, "assert-throw")
 
-        val restHead = new Node
+        val restHead = newNode
         val restLast = recStmts(restHead, rest)
-        connect(lastExpr, restHead, Some(lastExpr.result -> true))
+        connect(lastExpr, restHead, "assert-true", Some(lastExpr.result -> true))
         restLast
 
       case (_: ast.Import) :: rest =>
@@ -441,15 +456,17 @@ trait Extraction extends ControlFlowGraphs { self =>
         case expr: ast.Expr => recExpr(defHead, expr)
         case _ => recStmt(defHead, stmt)
       }
-      connect(defLast, scope.definition.graph.lastNode)
+      connect(defLast, scope.definition.graph.lastNode, "last")
     }
 
     def recDef(definition: ast.Definition)(implicit scope: Scope): Unit = definition match {
       case ast.PackageDef(name, _, _, defs) =>
-        defs.foreach(recDef(_)(scope.inClass(name)))
+        val nscope = scope.inClass(name)
+        defs.foreach(recDef(_)(nscope))
 
       case ast.ClassDef(_, name, _, _, _, defs, _) =>
-        defs.foreach(recDef(_)(scope.inClass(name)))
+        val nscope = scope.inClass(name)
+        defs.foreach(recDef(_)(nscope))
 
       case ast.FunctionDef(_, name, _, _, params, _, body) =>
         extractDef(body)(scope.inDef(name, params.map(vd => Identifier(vd.name) -> simpleType(vd.tpe))))
@@ -465,7 +482,7 @@ trait Extraction extends ControlFlowGraphs { self =>
         val defHead = dscope.definition.graph.firstNode
         val defLast = recExpr(defHead, expr)(dscope)
         val patternLast = recPattern(defLast, pattern, defLast.result)(dscope)
-        connect(patternLast, dscope.definition.graph.lastNode)(dscope)
+        connect(patternLast, dscope.definition.graph.lastNode, "last")(dscope)
 
       case ast.Initializer(_, _, body) =>
         extractDef(body)(scope.inDef("$init", Nil))
@@ -478,13 +495,13 @@ trait Extraction extends ControlFlowGraphs { self =>
       case ast.FunctionCall(receiver, _, args) =>
         val id = assign(current, None, Unapply(simpleType(receiver), selector)).result
 
-        val node = new Node
+        val node = newNode
         val binders = args.map(a => a match {
           case ast.Bind(name, expr) => Identifier(name) -> expr
-          case _ => Identifier(namer.fresh("binder")) -> expr
+          case _ => Identifier(namer.fresh("$binder")) -> expr
         })
         node.add(MultiAssign(binders.map(_._1), id))
-        connect(current, node, Some(id -> true))
+        connect(current, node, "match-unapply", Some(id -> true))
 
         binders.foldLeft(node) { case (node, (id, expr)) =>
           recPattern(node, expr, id)
@@ -494,13 +511,13 @@ trait Extraction extends ControlFlowGraphs { self =>
         val exprLast = recPattern(current, expr, selector)
         val guardLast = recExpr(exprLast, guard)
 
-        val node = new Node
-        connect(guardLast, node, Some(guardLast.result -> true))
+        val node = newNode
+        connect(guardLast, node, "match-guard", Some(guardLast.result -> true))
         node
 
       case ast.Ident(ast.Names.DEFAULT) =>
-        val node = new Node
-        connect(current, node, Some(Default -> true))
+        val node = newNode
+        connect(current, node, "match-default", Some(Default -> true))
         node
 
       case ast.Wildcard =>
@@ -509,8 +526,8 @@ trait Extraction extends ControlFlowGraphs { self =>
       case _ =>
         val exprLast = recExpr(current, expr)
         val id = assign(exprLast, None, BinaryOp(selector, "==", exprLast.result)).result
-        val node = new Node
-        connect(current, node, Some(id -> true))
+        val node = newNode
+        connect(current, node, "match-guard", Some(id -> true))
         node
     }
 
@@ -570,14 +587,11 @@ trait Extraction extends ControlFlowGraphs { self =>
       case ast.Assign(lhs, rhs, optOp) =>
         val lhsLast = recExpr(current, lhs)
         val (value, target) = lhsLast.statements.lastOption match {
-          case Some(Assign(id, f @ Field(value, name))) => value match {
-            case fid: Identifier =>
-              // remove assignment of field to id since we're going to assign directly to the field
-              lhsLast._statements = lhsLast.statements.init
-              val fieldValue: () => Identifier = () => assign(lhsLast, None, f).result.asInstanceOf[Identifier]
-              fieldValue -> Left(fid -> name)
-            case _ => throw NormalizationError("Can't assign to " + f)
-          }
+          case Some(Assign(id, f @ Field(value, name))) =>
+            // remove assignment of field to id since we're going to assign directly to the field
+            lhsLast._statements = lhsLast.statements.init
+            val fieldValue: () => Identifier = () => assign(lhsLast, None, f).result.asInstanceOf[Identifier]
+            fieldValue -> Left(value -> name)
           case _ => lhsLast.result match {
             case id: Identifier => (() => id) -> Right(id)
             case _ => throw NormalizationError("Can't assign to " + lhsLast.result)

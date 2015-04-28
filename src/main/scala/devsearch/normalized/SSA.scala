@@ -6,7 +6,7 @@ sealed trait Statement extends ast.Positional {
   def rename(f: Identifier => Identifier): Statement = this match {
     case Assign(id, expr) => Assign(f(id).setPos(id.pos), expr rename f).setPos(pos)
     case MultiAssign(ids, expr) => MultiAssign(ids.map(id => f(id).setPos(id.pos)), expr rename f).setPos(pos)
-    case FieldAssign(id, name, value) => FieldAssign(f(id).setPos(id.pos), name, value rename f).setPos(pos)
+    case FieldAssign(obj, name, value) => FieldAssign(obj rename f, name, value rename f).setPos(pos)
     case Mutator(expr) => Mutator(expr rename f).setPos(pos)
     case Throw(value) => Throw(value rename f).setPos(pos)
   }
@@ -16,7 +16,7 @@ case class Assign(id: Identifier, expr: Expr) extends Statement
 
 case class MultiAssign(ids: Seq[Identifier], expr: Expr) extends Statement
 
-case class FieldAssign(id: Identifier, name: String, value: Value) extends Statement
+case class FieldAssign(obj: Value, name: String, value: Value) extends Statement
 
 case class Mutator(expr: Expr) extends Statement
 

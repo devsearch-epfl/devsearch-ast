@@ -3,6 +3,7 @@ package devsearch.normalized
 trait Edge {
   type Node
 
+  def reason: String
   def from: Node
   def to: Node
 }
@@ -54,5 +55,9 @@ trait Graph { self =>
     val nodeMapping = (nodes zip newNodes).toMap
     val newEdges = edges.map(e => ops.newEdge(e, nodeMapping(e.from), nodeMapping(e.to)))
     ops.newGraph(newNodes, newEdges)
+  }
+
+  def printStructure: String = {
+    edges.map(e => (nodes.indexOf(e.from) + 1, nodes.indexOf(e.to) + 1, e.reason)).toList.sorted.mkString("\n")
   }
 }

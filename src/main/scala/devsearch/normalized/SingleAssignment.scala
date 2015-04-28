@@ -1,12 +1,12 @@
 package devsearch.normalized
 
-class StaticRenamer extends Extraction {
+trait SingleAssignment extends AstExtraction {
 
-  class StaticRenamingTransformer {
-    var namer: Namer = _
+  def singleAssignment(definition: Definition): (Namer, Definition) = {
+    val namer = new Namer("$")
 
-    def apply(definition: Definition): Definition = {
-      val newDefinitions = definition.definitions.map(apply)
+    def rec(definition: Definition): Definition = {
+      val newDefinitions = definition.definitions.map(rec)
 
       definition match {
         case code: CodeDefinition =>
@@ -41,13 +41,16 @@ class StaticRenamer extends Extraction {
             }
           }
 
-          var nodeStmts: Map[Node, List[Statement]] = Map.empty
-          var nodePhis:  Map[Node, Map[String, Map[Node, String]]] = defphis.map { case (node, ids) =>
-            node -> ids.map(id => id.name -> graph.prev(node).map(n => n.from -> id.name).toMap).toMap
-          }
+          var nodeStmts: Map[Node, List[Statement]] = Map.empty.withDefaultValue(Nil)
+          var nodePhis:  Map[Node, Map[String, (String, Map[Node, String])]] = defphis.map { case (node, ids) =>
+            node -> ids.map(id => id.name -> (id.name -> graph.prev(node).map(n => n.from -> id.name).toMap)).toMap
+          }.withDefaultValue(Map.empty)
 
           def renameNode(node: Node, prevMapping: Map[String,String]): Unit = {
             var mapping = prevMapping
+            nodePhis += node -> nodePhis(node).map { case (name, (_, phis)) => name -> (namer.fresh(name) -> phis) }
+            mapping ++= nodePhis(node).map(p => p._1 -> p._2._1)
+
             def mapped(map: Map[String,String]): Identifier => Identifier = {
               id => Identifier(map.getOrElse(id.name, id.name))
             }
@@ -71,10 +74,9 @@ class StaticRenamer extends Extraction {
               freshStmt
             })
 
-            // TODO: freshen phi names too!!
             nodePhis ++= graph.next(node).map(e => e.to).map(n => n -> {
-              nodePhis(n).map { case (name, phis) =>
-                name -> (phis + (node -> mapping.getOrElse(name, name)))
+              nodePhis(n).map { case (name, (renamed, phis)) =>
+                name -> (renamed -> (phis + (node -> mapping.getOrElse(name, name))))
               }
             })
 
@@ -82,11 +84,14 @@ class StaticRenamer extends Extraction {
           }
 
           val phiGraph = graph.map { node =>
-            val stmts = defphis(node).map(id => Assign(id, Phi(graph.prev(node).toList.map(_ => id))))
-            node.withStatements(stmts.toList ++ node.statements)
-          }
+            val phis = nodePhis(node).map { case (_, (nme, phis)) =>
+              val uniquePhis: List[String] = phis.values.toSet.toList
+              Assign(Identifier(nme), Phi(uniquePhis.map(Identifier(_))))
+            }
 
-          
+            val stmts = phis.toList ++ nodeStmts(node)
+            node.withStatements(stmts)
+          }
 
           code match {
             case fd: FunctionDefinition => new FunctionDefinition(definition.name, fd.params) {
@@ -104,7 +109,9 @@ class StaticRenamer extends Extraction {
         }
       }
     }
-  }
 
+    val newDef = rec(definition)
+    namer -> newDef
+  }
 
 }
