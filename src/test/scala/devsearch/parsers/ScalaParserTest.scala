@@ -1000,4 +1000,15 @@ class ScalaParserTest extends FunSuite with ParserTest {
       |
     """.stripMargin
   )
+
+  /**
+   * Test on a specific file that failed on Spark
+   */
+  def checkInfLoopFile(): Unit = {
+    val fileURL = getClass.getResource("/samples/UI.scala")
+    val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
+    assert(QueryParser.parse(filePath) != NoDef)
+  }
+
+  checkInfLoopFile()
 }
