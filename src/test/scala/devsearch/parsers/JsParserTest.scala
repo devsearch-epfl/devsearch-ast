@@ -421,4 +421,15 @@ class JsParserTest extends FunSuite {
     val source = new ContentsSource("NoFile", "/ /// /")
     assert(JsParser.parse(source) == FunctionCall(Ident("$$regexp"),List(),List(SimpleLiteral(PrimitiveTypes.String," "))))
   }
+
+  /**
+   * Test on a specific file that failed on Spark
+   */
+  def checkInfLoopFile(): Unit = {
+    val fileURL = getClass.getResource("/samples/event.js")
+    val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
+    assert(JsParser.parse(filePath) != NoDef)
+  }
+
+  checkInfLoopFile()
 }
