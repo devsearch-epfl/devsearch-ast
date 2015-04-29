@@ -1010,5 +1010,7 @@ class ScalaParserTest extends FunSuite with ParserTest {
     assert(QueryParser.parse(uiFilePath) != NoDef)
   }
 
-  checkInfLoopFile()
+  test("parser should not loop infinitely") {
+    checkInfLoopFile()
+  }
 }

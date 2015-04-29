@@ -270,8 +270,8 @@ object JsParser extends Parser {
     lazy val PropertyName = ((StringLiteral | DecimalLiteral) ^^ { _.value }) | Field
 
     lazy val StringLiteral = withPos(
-      ("\"([^\\\\\"]+|\\\\([bfnrtv'\"\\\\]|[0-3]?[0-7]{1,2}|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|\\s+))*\"".r |
-        "'([^\\\\']+|\\\\([bfnrtv'\"\\\\]|[0-3]?[0-7]{1,2}|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|\\s+))*'".r) ^^ {
+      ("\"([^\\\\\"]+|\\\\([bfnrtv'\"\\\\/]|[0-3]?[0-7]{1,2}|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|\\s+))*\"".r |
+        "'([^\\\\']+|\\\\([bfnrtv'\"\\\\/]|[0-3]?[0-7]{1,2}|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|\\s+))*'".r) ^^ {
         SimpleLiteral(PrimitiveTypes.String, _)
       })
 

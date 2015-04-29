@@ -432,7 +432,12 @@ class JsParserTest extends FunSuite {
 
     val fckFilePath = CodeProvider.absResourcePath("/samples/fcktextcolorcommand.js")
     assert(JsParser.parse(fckFilePath) != NoDef)
+
+    val popupFilePath = CodeProvider.absResourcePath("/samples/tiny_mce_popup.js")
+    assert(JsParser.parse(popupFilePath) != NoDef)
   }
 
-  checkInfLoopFile()
+  test("parsing should not loop infinitely") {
+    checkInfLoopFile()
+  }
 }
