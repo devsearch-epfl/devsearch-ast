@@ -437,5 +437,7 @@ class JsParserTest extends FunSuite {
     assert(JsParser.parse(popupFilePath) != NoDef)
   }
 
-  checkInfLoopFile()
+  test("parsing should not loop infinitely") {
+    checkInfLoopFile()
+  }
 }
