@@ -1,35 +1,28 @@
 package devsearch.normalized
 
+import devsearch.utils._
 import devsearch.parsers._
 import org.scalatest._
 
-class NormalizationTest extends FlatSpec {
+class NormalizationTest extends FlatSpec with CodeProvider {
 
   "Normalization" should "work on JavaConcepts.java" in {
-    val fileURL = getClass.getResource("/samples/JavaConcepts.java")
-    val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
-    val ast = JavaParser.parse(filePath)
-    Normalizer(ast)
+    Normalizer(sampleCode("JavaConcepts.java").ast)
   }
 
   it should "work on AccountDataManager.java" in {
-    val fileURL = getClass.getResource("/samples/AccountDataManager.java")
-    val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
-    val ast = JavaParser.parse(filePath)
-    Normalizer(ast)
+    Normalizer(sampleCode("AccountDataManager.java").ast)
   }
 
   it should "work on UI.scala" in {
-    val fileURL = getClass.getResource("/samples/UI.scala")
-    val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
-    val ast = QueryParser.parse(filePath)
-    Normalizer(ast)
+    Normalizer(sampleCode("UI.scala").ast)
   }
 
   it should "work on event.js" in {
-    val fileURL = getClass.getResource("/samples/event.js")
-    val filePath = new java.io.File(fileURL.toURI).getAbsolutePath
-    val ast = JsParser.parse(filePath)
-    Normalizer(ast)
+    Normalizer(sampleCode("event.js").ast)
+  }
+
+  it should "work on fcktextcolorcommand.js" in {
+    Normalizer(sampleCode("fcktextcolorcommand.js").ast)
   }
 }

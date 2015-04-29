@@ -3,10 +3,12 @@ package devsearch.normalized
 import devsearch.ast
 
 sealed trait Statement extends ast.Positional {
+
   def rename(f: Identifier => Identifier): Statement = this match {
     case Assign(id, expr) => Assign(f(id).setPos(id.pos), expr rename f).setPos(pos)
-    case MultiAssign(ids, expr) => MultiAssign(ids.map(id => f(id).setPos(id.pos)), expr rename f).setPos(pos)
+    case MultiAssign(ids, value) => MultiAssign(ids.map(id => f(id).setPos(id.pos)), value rename f).setPos(pos)
     case FieldAssign(obj, name, value) => FieldAssign(obj rename f, name, value rename f).setPos(pos)
+    case IndexAssign(array, idx, value) => IndexAssign(array rename f, idx rename f, value rename f).setPos(pos)
     case Mutator(expr) => Mutator(expr rename f).setPos(pos)
     case Throw(value) => Throw(value rename f).setPos(pos)
   }
@@ -14,9 +16,11 @@ sealed trait Statement extends ast.Positional {
 
 case class Assign(id: Identifier, expr: Expr) extends Statement
 
-case class MultiAssign(ids: Seq[Identifier], expr: Expr) extends Statement
+case class MultiAssign(ids: Seq[Identifier], value: Value) extends Statement
 
 case class FieldAssign(obj: Value, name: String, value: Value) extends Statement
+
+case class IndexAssign(array: Value, index: Value, value: Value) extends Statement
 
 case class Mutator(expr: Expr) extends Statement
 
@@ -34,8 +38,22 @@ sealed trait Expr extends ast.Positional {
     case Unapply(tpe, value) => Unapply(tpe, value rename f).setPos(pos)
     case Phi(values) => Phi(values.map(_ rename f)).setPos(pos)
     case Field(value, name) => Field(value rename f, name).setPos(pos)
-    case v: Value => v rename f
-    case (_: Catch) => this
+    case id: Identifier if id != Default => f(id).setPos(id.pos)
+    case (_: Value) | (_: Catch) => this
+  }
+
+  def dependencies: Set[Identifier] = this match {
+    case BinaryOp(lhs, _, rhs) => lhs.dependencies ++ rhs.dependencies
+    case UnaryOp(expr, _, _) => expr.dependencies
+    case Call(fun, args) => fun.dependencies ++ args.flatMap(_.dependencies)
+    case New(_, args) => args.flatMap(_.dependencies).toSet
+    case Index(expr, index) => expr.dependencies ++ index.dependencies
+    case InstanceOf(expr, _) => expr.dependencies
+    case Unapply(_, value) => value.dependencies
+    case Phi(values) => values.flatMap(_.dependencies).toSet
+    case Field(value, _) => value.dependencies
+    case id: Identifier => Set(id)
+    case (_: Value) | (_: Catch) => Set.empty
   }
 }
 
@@ -60,13 +78,7 @@ case class Phi(values: Seq[Value]) extends Expr
 case class Field(value: Value, name: String) extends Expr
 
 
-sealed trait Value extends Expr {
-  override def rename(f: Identifier => Identifier): Value = this match {
-    case Default => this
-    case id: Identifier => f(id).setPos(pos)
-    case _ => this
-  }
-}
+sealed trait Value extends Expr
 
 case class Identifier(name: String) extends Value
 

@@ -110,9 +110,10 @@ trait ControlFlowGraphs { self =>
 
     def transitiveEdge(n1: Node, n2: Node): Boolean = withCache(_transitiveEdges((n1, n2)))
 
-    private var _immediateDominator : Map[Node, Node]      = _
-    private var _dominatedChildren  : Map[Node, Set[Node]] = _
-    private var _dominanceFrontier  : Map[Node, Set[Node]] = _
+    private var _immediateDominator  : Map[Node, Node]      = _
+    private var _dominatedChildren   : Map[Node, Set[Node]] = _
+    private var _transitiveDominated : Map[Node, Set[Node]] = _
+    private var _dominanceFrontier   : Map[Node, Set[Node]] = _
 
     // Lengauer Tarjan algorithm for dominator tree
     private def dominatorTree(): Unit = {
@@ -192,7 +193,15 @@ trait ControlFlowGraphs { self =>
 
       val rev = idx.map(p => p._2 -> p._1)
       _immediateDominator = (idom - 0).map(p => rev(p._1) -> rev(p._2))
-      _dominatedChildren  = _immediateDominator.toList.map(p => p._2 -> p._1).groupBy(_._1).mapValues(_.map(_._2).toSet)
+      _dominatedChildren  = _immediateDominator.toList.map(p => p._2 -> p._1).groupBy(_._1).mapValues(_.map(_._2).toSet).withDefaultValue(Set.empty)
+
+      var changed = true
+      _transitiveDominated = _dominatedChildren
+      while(changed) {
+        val next = _transitiveDominated.map { case (k,v) => v.flatMap(_transitiveDominated) }.withDefaultValue(Set.empty)
+        changed = next != _transitiveDominated
+        _transitiveDominated = next
+      }
 
       _dominanceFrontier = Map.empty[Node, Set[Node]].withDefaultValue(Set.empty)
       for (b <- nodes if prev(b).size >= 2; p <- prev(b)) {
@@ -204,9 +213,10 @@ trait ControlFlowGraphs { self =>
       }
     }
 
-    def dominator(node: Node): Node = withCache(_immediateDominator(node))
+    def dominator(node: Node): Option[Node] = withCache(_immediateDominator.get(node))
 
     def dominated(node: Node): Set[Node] = withCache(_dominatedChildren(node))
+    def transitiveDominated(node: Node): Set[Node] = withCache(_transitiveDominated(node))
 
     def frontier(node: Node): Set[Node] = withCache(_dominanceFrontier(node))
   }

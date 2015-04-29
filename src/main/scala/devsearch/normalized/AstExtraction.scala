@@ -76,26 +76,32 @@ trait AstExtraction extends ControlFlowGraphs { self =>
     // programmatically generated during code transformation
     val namer = new Namer("$")
 
-    type Assignable = Either[(Value, String), Identifier]
+    type Assignable = Either[Value => List[Statement], Identifier]
 
-    def assign(node: Node, optAssign: Option[Assignable], expr: Expr): Node = optAssign match {
-      case Some(Left((id, name))) => expr match {
-        case value: Value =>
-          node.add(FieldAssign(id, name, value))
-          node.setResult(value)
-        case _ =>
-          val id = Identifier(namer.fresh("x"))
-          node.add(Assign(id, expr))
-          node.add(FieldAssign(id, name, id))
-          node.setResult(id)
-      }
-      case _ =>
-        val id = optAssign match {
-          case Some(Right(id)) => id
-          case _ => Identifier(namer.fresh("x"))
+    def assign(node: Node, optAssign: Option[Assignable], expr: Expr): Node = {
+      optAssign match {
+        case Some(Left(cons)) => expr match {
+          case value: Value =>
+            cons(value).foreach(node.add(_))
+          case _ =>
+            val id = Identifier(namer.fresh("x"))
+            node.add(Assign(id, expr))
+            cons(id).foreach(node.add(_))
         }
-        node.add(Assign(id, expr))
-        node.setResult(id)
+        case _ =>
+          val id = optAssign match {
+            case Some(Right(id)) => id
+            case _ => Identifier(namer.fresh("x"))
+          }
+          node.add(Assign(id, expr))
+      }
+
+      node.statements.lastOption match {
+        case Some(Assign(id, _)) => node.setResult(id)
+        case Some(FieldAssign(_, _, value)) => node.setResult(value)
+        case Some(IndexAssign(_, _, value)) => node.setResult(value)
+        case _ => throw NormalizationError("Missformed assignment statement")
+      }
     }
 
     def emptyOrNew(node: Node)(implicit scope: Scope { type Def <: CodeDefinition }): Node = {
@@ -590,24 +596,33 @@ trait AstExtraction extends ControlFlowGraphs { self =>
 
       case ast.Assign(lhs, rhs, optOp) =>
         val lhsLast = recExpr(current, lhs)
-        val (value, target) = lhsLast.statements.lastOption match {
-          case Some(Assign(id, f @ Field(value, name))) =>
-            // remove assignment of field to id since we're going to assign directly to the field
-            lhsLast._statements = lhsLast.statements.init
-            val fieldValue: () => Identifier = () => assign(lhsLast, None, f).result.asInstanceOf[Identifier]
-            fieldValue -> Left(value -> name)
+        val nextAssign = lhsLast.statements.lastOption match {
+          case Some(Assign(id, f @ (_: Field | _: Index))) =>
+            val assign: Value => Statement = f match {
+              case Field(id, name) => FieldAssign(id, name, _).setPos(f.pos)
+              case Index(arr, idx) => IndexAssign(arr, idx, _).setPos(f.pos)
+              case _ => throw NormalizationError("Only field and index should be matched...")
+            }
+
+            Left(optOp match {
+              case Some(op) => (result: Value) => {
+                val tmpID = Identifier(namer.fresh("x"))
+                List(Assign(tmpID, BinaryOp(id, op, result)), assign(tmpID))
+              }
+              case None =>
+                // remove assignment of field to id since we're going to assign directly to the field
+                lhsLast._statements = lhsLast.statements.init
+                (result: Value) => List(assign(result))
+            })
+
           case _ => lhsLast.result match {
-            case id: Identifier => (() => id) -> Right(id)
+            case id: Identifier => Right(id)
             case _ => throw NormalizationError("Can't assign to " + lhsLast.result)
           }
         }
 
-        val rhsLast = recExpr(lhsLast, rhs, Some(target))
-        val rhsResult = rhsLast.result
-        if (optOp.isDefined) {
-          val id = value()
-          assign(rhsLast, Some(Right(id)), BinaryOp(id, optOp.get, rhsResult))
-        }
+        val rhsLast = recExpr(lhsLast, rhs, Some(nextAssign))
+        assignID.foreach { id => assign(rhsLast, Some(id), rhsLast.result) }
         rhsLast
 
       case ast.Cast(expr, _) =>
