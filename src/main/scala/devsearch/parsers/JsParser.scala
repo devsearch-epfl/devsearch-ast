@@ -163,7 +163,7 @@ object JsParser extends Parser {
 
     lazy val MemberExpressionPart: PackratParser[Expr => Expr] = withPos(
       "[" ~> Expression <~ "]" ^^ { x => (y: Expr) => ArrayAccess(y, x) } |
-      "." ~> Identifier ^^ { x => (y: Expr) => FieldAccess(y, x, Nil) })
+      "." ~> Field             ^^ { x => (y: Expr) => FieldAccess(y, x, Nil) })
 
     lazy val BitwiseANDExpression = withPos(EqualityExpression * withPos(BitwiseANDOperator ^^ makeBinaryOp))
 
@@ -394,9 +394,9 @@ object JsParser extends Parser {
     lazy val Initialiser = withPos("=" ~> AssignmentExpression)
 
     lazy val CallExpressionPart = withPos(
-      Arguments                ^^ { x => (y: Expr) => x.map(args => FunctionCall(y, Nil, args)) getOrElse y }
+      Arguments                ^^ { x => (y: Expr) => FunctionCall(y, Nil, x.toList.flatten) }
     | "[" ~> Expression <~ "]" ^^ { x => (y: Expr) => ArrayAccess(y, x) }
-    | "." ~> Identifier        ^^ { x => (y: Expr) => FieldAccess(y, x, Nil) })
+    | "." ~> Field             ^^ { x => (y: Expr) => FieldAccess(y, x, Nil) })
 
     lazy val RelationalNoInOperator = "<=" | ">=" | "<" | ">" | "instanceof"  
 

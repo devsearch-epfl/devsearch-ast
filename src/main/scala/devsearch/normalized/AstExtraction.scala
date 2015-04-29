@@ -492,13 +492,17 @@ trait AstExtraction extends ControlFlowGraphs { self =>
     }
 
     def recPattern(current: Node, expr: ast.Expr, selector: Value)(implicit scope: Scope { type Def <: CodeDefinition }): Node = expr match {
+      case ast.Bind(name, e) =>
+        val lastExpr = recPattern(current, e, selector)
+        assign(lastExpr, Some(Right(Identifier(name))), lastExpr.result)
+
       case ast.FunctionCall(receiver, _, args) =>
         val id = assign(current, None, Unapply(simpleType(receiver), selector)).result
 
         val node = newNode
         val binders = args.map(a => a match {
           case ast.Bind(name, expr) => Identifier(name) -> expr
-          case _ => Identifier(namer.fresh("$binder")) -> expr
+          case _ => Identifier(namer.fresh("$binder")) -> a
         })
         node.add(MultiAssign(binders.map(_._1), id))
         connect(current, node, "match-unapply", Some(id -> true))
