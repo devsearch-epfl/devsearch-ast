@@ -443,6 +443,9 @@ class JsParserTest extends FunSuite {
     } catch {
       case _: ParsingFailedError => true
     })
+
+    val arrayEachFilePath = CodeProvider.absResourcePath("/samples/array-each.js")
+    assert(JsParser.parse(arrayEachFilePath) != NoDef)
   }
 
   test("parsing should not loop infinitely") {
