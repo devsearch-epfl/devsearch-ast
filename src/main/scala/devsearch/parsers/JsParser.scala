@@ -48,13 +48,15 @@ object JsParser extends Parser {
     def convertPosition(pos: scala.util.parsing.input.Position): devsearch.ast.Position =
       new SimplePosition(source, pos.line, pos.column)
 
-    def withPos[T <% devsearch.ast.Positional with Commentable](p: => PackratParser[T]): PackratParser[T] = Parser { in =>
-      val offset = in.offset
-      val start = handleWhiteSpace(in.source, offset)
-      p(in.drop (start - offset)) match {
-        case Success(t, in1) =>
-          Success(consumeComment(t.setPos(convertPosition(in.pos))).asInstanceOf[T], in1)
-        case ns: NoSuccess => ns
+    def withPos[T <% devsearch.ast.Positional with Commentable](p: => PackratParser[T]): PackratParser[T] = new PackratParser[T] {
+      def apply(in: Input) = {
+        val offset = in.offset
+        val start = handleWhiteSpace(in.source, offset)
+        p(in.drop (start - offset)) match {
+          case Success(t, in1) =>
+            Success(consumeComment(t.setPos(convertPosition(in.pos))).asInstanceOf[T], in1)
+          case ns: NoSuccess => ns
+        }
       }
     }
 
@@ -269,11 +271,38 @@ object JsParser extends Parser {
 
     lazy val PropertyName = ((StringLiteral | DecimalLiteral) ^^ { _.value }) | Field
 
-    lazy val StringLiteral = withPos(
-      ("\"([^\\\\\"]+|\\\\([bfnrtv'\"\\\\/]|[0-3]?[0-7]{1,2}|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|\\s+))*\"".r |
-        "'([^\\\\']+|\\\\([bfnrtv'\"\\\\/]|[0-3]?[0-7]{1,2}|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|\\s+))*'".r) ^^ {
-        SimpleLiteral(PrimitiveTypes.String, _)
-      })
+    lazy val StringLiteral = withPos(new PackratParser[SimpleLiteral] {
+      lazy val dq = "([^\\\\\"]+|\\\\([bfnrtv'\"\\\\/]|[0-3]?[0-7]{1,2}|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|\\s+))*".r
+      lazy val sq = "([^\\\\']+|\\\\([bfnrtv'\"\\\\/]|[0-3]?[0-7]{1,2}|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|\\s+))*".r
+
+      def apply(in: Input) = {
+        val source = in.source
+        val offset = in.offset
+        val start = handleWhiteSpace(source, offset)
+
+        val opt = if (start < source.length && source.charAt(start) == '"') Some('"', dq)
+          else if (start < source.length && source.charAt(start) == ''') Some(''', sq)
+          else None
+
+        opt match {
+          case Some((c, r)) =>
+            val end = r findPrefixMatchOf source.subSequence(start + 1, source.length) match {
+              case Some(matched) => matched.end
+              case None => 0
+            }
+
+            if (source.length > start + end + 1 && source.charAt(start + end + 1) == c) {
+              Success(SimpleLiteral(PrimitiveTypes.String, source.subSequence(start, start + end + 2).toString), in.drop(start + end + 2 - offset))
+            } else {
+              val found = if (start + end + 1 == source.length) "end of source" else "`"+source.charAt(start + end + 1)+"'"
+              Failure("`"+c+"' expected but "+found+" found", in.drop(start - offset))
+            }
+          case None =>
+            val found = if (start == source.length) "end of source" else "`"+source.charAt(start)+"'"
+            Failure("`\"' or `'' expected but "+found+" found", in.drop(start - offset))
+        }
+      }
+    })
 
     lazy val RegularExpressionLiteral = withPos(
       (("/" ^^ { s => parsingRegex = true; s }) ~> RegularExpressionBody) ~ ("/" ~> opt(RegularExpressionFlags)) ^^ { case body ~ flags =>
@@ -296,7 +325,7 @@ object JsParser extends Parser {
       DecimalIntegerLiteral ~ "." ~ """[0-9]*""".r ~ """([Ee][+-]?[0-9]+)?""".r ^^ { case a~b~c~d => SimpleLiteral(PrimitiveTypes.Double, a+b+c+d) } |
       "." ~ """[0-9]+""".r ~ """([Ee][+-]?[0-9]+)?""".r                         ^^ { case a~b~c   => SimpleLiteral(PrimitiveTypes.Double, a+b+c)   } |
       DecimalIntegerLiteral ~ """([Ee][+-]?[0-9]+)?""".r                        ^^ { case a~b     => SimpleLiteral(PrimitiveTypes.Double, a+b)     })
-    
+
     lazy val ArgumentMemberExpressionParts = Arguments ~ rep(MemberExpressionPart) ^^ {
       case args ~ parts => (e: Expr) => parts.foldLeft[Expr](FunctionCall(e, Nil, args.toList.flatten))(combineMember)
     }
@@ -349,7 +378,7 @@ object JsParser extends Parser {
     | "[" ~> Expression <~ "]" ^^ { x => (y: Expr) => ArrayAccess(y, x) }
     | "." ~> Identifier        ^^ { x => (y: Expr) => FieldAccess(y, x, Nil) })
 
-    lazy val RelationalNoInOperator = "<" | ">" | "<=" | ">=" | "instanceof"  
+    lazy val RelationalNoInOperator = "<=" | ">=" | "<" | ">" | "instanceof"  
 
     lazy val AssignmentExpressionNoIn: PackratParser[Expr] = withPos(
       LeftHandSideExpression ~ (
@@ -360,7 +389,7 @@ object JsParser extends Parser {
       } | ConditionalExpressionNoIn)
 
     lazy val PrimaryExpression = withPos(
-      "this" ^^^ { This(NoExpr) }
+      "this" ^^ { _ => This(NoExpr) }
     | ObjectLiteral
     | "(" ~> Expression <~ ")"
     | Identifier ^^ { Ident(_) }

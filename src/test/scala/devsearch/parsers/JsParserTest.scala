@@ -437,7 +437,12 @@ class JsParserTest extends FunSuite {
     assert(JsParser.parse(popupFilePath) != NoDef)
     
     val epsgFilePath = CodeProvider.absResourcePath("/samples/epsg102758.js")
-    assert(JsParser.parse(epsgFilePath) != NoDef)
+    assert(try {
+      JsParser.parse(epsgFilePath)
+      false
+    } catch {
+      case _: ParsingFailedError => true
+    })
   }
 
   test("parsing should not loop infinitely") {
