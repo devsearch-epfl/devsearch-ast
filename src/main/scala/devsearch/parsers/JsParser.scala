@@ -48,7 +48,8 @@ object JsParser extends Parser {
     def convertPosition(pos: scala.util.parsing.input.Position): devsearch.ast.Position =
       new SimplePosition(source, pos.line, pos.column)
 
-    def withPos[T <% devsearch.ast.Positional with Commentable](p: => PackratParser[T]): PackratParser[T] = new PackratParser[T] {
+    def withPos[T <% devsearch.ast.Positional with Commentable](_p: => PackratParser[T]): PackratParser[T] = new PackratParser[T] {
+      lazy val p = _p
       def apply(in: Input) = {
         val offset = in.offset
         val start = handleWhiteSpace(in.source, offset)
