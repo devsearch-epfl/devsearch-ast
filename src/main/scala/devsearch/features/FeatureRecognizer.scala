@@ -2,7 +2,6 @@ package devsearch.features
 
 import devsearch.ast._
 import devsearch.parsers._
-import scala.util.parsing.combinator._
 
 /**
  * Base feature class
@@ -104,14 +103,16 @@ case class CodeFileData(size: Long, language: String, location: CodeFileLocation
 
 object CodeFileData {
   def apply(size: Long, language: String, location: CodeFileLocation, source: String): CodeFileData = {
-    val parser = Languages.parser(language)
+    val parserOption = Languages.parser(language)
+    val ast = parserOption match {
+      case Some(parser) =>
+        scala.util.Try(
+          parser.parse(new ContentsSource(location.fileName, source))
+        ) getOrElse Empty[AST]
 
-    new CodeFileData(
-      size, language, location,
-      scala.util.Try(
-        parser.parse(new ContentsSource(location.fileName, source))
-      ) getOrElse Empty[AST]
-    )
+      case None => Empty[AST]
+    }
+    new CodeFileData(size, language, location, ast)
   }
 }
 

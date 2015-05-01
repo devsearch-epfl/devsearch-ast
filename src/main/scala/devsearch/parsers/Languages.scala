@@ -10,14 +10,15 @@ object Languages {
   val NotSupported = "NotSupported"
 
   def isSupported(language: String): Boolean = {
-    List(Go, Java, JavaScript, Scala).contains(language)
+    parser(language).isDefined
   }
 
-  def parser(language: String): Parser = language match {
-    case Go => GoParser
-    case Java => JavaParser
-    case JavaScript => JsParser
-    case Scala => QueryParser
+  def parser(language: String): Option[Parser] = language match {
+    case Go => Some(GoParser)
+    case Java => Some(JavaParser)
+    case JavaScript => Some(JsParser)
+    case Scala => Some(QueryParser)
+    case _ => None
   }
 
   def guess(filename: String): String = {
