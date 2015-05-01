@@ -28,7 +28,8 @@ libraryDependencies ++= Seq(
 
 // Features
 libraryDependencies ++= Seq(
-  "com.github.nikita-volkov" % "sext" % "0.2.3"
+  "com.github.nikita-volkov" % "sext" % "0.2.3",
+  "commons-io" % "commons-io" % "2.4"
 )
 
 //parallelExecution in Test := false
