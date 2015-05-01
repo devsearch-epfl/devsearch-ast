@@ -93,15 +93,9 @@ trait SingleAssignment extends AstExtraction {
             node.withStatements(stmts)
           }
 
-          code match {
-            case fd: FunctionDefinition => new FunctionDefinition(definition.name, fd.params) {
-              override val graph = phiGraph
-              override val definitions: List[Definition] = newDefinitions
-            }
-            case _ => new CodeDefinition(definition.name) {
-              override val graph = phiGraph
-              override val definitions: List[Definition] = newDefinitions
-            }
+          new CodeDefinition(definition.name) {
+            override val graph = phiGraph
+            override val definitions: List[Definition] = newDefinitions
           }
 
         case _ => new Definition(definition.name) {

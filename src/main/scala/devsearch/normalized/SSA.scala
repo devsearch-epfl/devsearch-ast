@@ -38,8 +38,8 @@ sealed trait Expr extends ast.Positional {
     case Unapply(tpe, value) => Unapply(tpe, value rename f).setPos(pos)
     case Phi(values) => Phi(values.map(_ rename f)).setPos(pos)
     case Field(value, name) => Field(value rename f, name).setPos(pos)
-    case id: Identifier if id != Default => f(id).setPos(id.pos)
-    case (_: Value) | (_: Catch) => this
+    case v: Value => v rename f
+    case (_: Catch) => this
   }
 
   def dependencies: Set[Identifier] = this match {
@@ -78,7 +78,12 @@ case class Phi(values: Seq[Value]) extends Expr
 case class Field(value: Value, name: String) extends Expr
 
 
-sealed trait Value extends Expr
+sealed trait Value extends Expr {
+  override def rename(f: Identifier => Identifier): Value = this match {
+    case id: Identifier if id != Default => f(id).setPos(id.pos)
+    case _ => this
+  }
+}
 
 case class Identifier(name: String) extends Value
 

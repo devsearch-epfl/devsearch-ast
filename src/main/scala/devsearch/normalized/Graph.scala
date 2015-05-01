@@ -32,6 +32,9 @@ trait Graph { self =>
   def nodes: List[Node]
   def edges: Set[Edge]
 
+  def firstNode: Node = nodes.head
+  def lastNode: Node = nodes.last
+
   def next(node: Node): Set[Edge] = edges.filter(_.from == node)
   def prev(node: Node): Set[Edge] = edges.filter(_.to == node)
 
@@ -46,6 +49,8 @@ trait Graph { self =>
       nodes.flatMap(prev(_).map(_.from))
     }(Set(node))
   }
+
+  def transitiveEdge(n1: Node, n2: Node): Boolean = transitiveNext(n1)(n2)
 
   def map(f: Node => Node)(implicit ops: GraphOps {
     type Node = self.Node

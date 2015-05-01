@@ -12,6 +12,22 @@ trait Node {
   def locked: Boolean
 }
 
+trait ControlFlowGraph { self: Graph =>
+  type Node <: devsearch.normalized.Node
+
+  def dominator(node: Node): Option[Node]
+  def dominated(node: Node): Set[Node]
+  def transitiveDominated(node: Node): Set[Node]
+  def frontier(node: Node): Set[Node]
+
+  def definingStatement(id: Identifier): Statement
+  def definingNode(id: Identifier): Node
+
+  def dependencies(id: Identifier): Set[Identifier]
+
+  def loops: Set[List[Node]]
+}
+
 trait ControlFlowGraphs { self =>
 
   type Node <: devsearch.normalized.Node
@@ -20,13 +36,13 @@ trait ControlFlowGraphs { self =>
   class Graph (
     private var _nodes: List[Node] = List(mkNode, mkNode),
     private var _edges: Set[Edge] = Set()
-  ) extends devsearch.normalized.Graph {
+  ) extends devsearch.normalized.Graph with ControlFlowGraph {
 
     type Node = self.Node
     type Edge = self.Edge
 
-    val firstNode = _nodes.head
-    val lastNode = _nodes.last
+    override val firstNode = _nodes.head
+    override val lastNode = _nodes.last
 
     def nodes: List[Node] = _nodes
     def newNode: Node = {
@@ -62,6 +78,7 @@ trait ControlFlowGraphs { self =>
         dirty = false
         transitiveClosure()
         dominatorTree()
+        computeFlow()
       }
       t
     }
@@ -105,10 +122,8 @@ trait ControlFlowGraphs { self =>
     }
 
     override def transitiveNext(node: Node): Set[Node] = withCache(_transitiveNext(node))
-
     override def transitivePrev(node: Node): Set[Node] = withCache(_transitivePrev(node))
-
-    def transitiveEdge(n1: Node, n2: Node): Boolean = withCache(_transitiveEdges((n1, n2)))
+    override def transitiveEdge(n1: Node, n2: Node): Boolean = withCache(_transitiveEdges((n1, n2)))
 
     private var _immediateDominator  : Map[Node, Node]      = _
     private var _dominatedChildren   : Map[Node, Set[Node]] = _
@@ -198,7 +213,7 @@ trait ControlFlowGraphs { self =>
       var changed = true
       _transitiveDominated = _dominatedChildren
       while(changed) {
-        val next = _transitiveDominated.map { case (k,v) => v.flatMap(_transitiveDominated) }.withDefaultValue(Set.empty)
+        val next = _transitiveDominated.map { case (k,v) => k -> v.flatMap(_transitiveDominated) }.withDefaultValue(Set.empty)
         changed = next != _transitiveDominated
         _transitiveDominated = next
       }
@@ -219,6 +234,69 @@ trait ControlFlowGraphs { self =>
     def transitiveDominated(node: Node): Set[Node] = withCache(_transitiveDominated(node))
 
     def frontier(node: Node): Set[Node] = withCache(_dominanceFrontier(node))
+
+    private var _definitionStmt : Map[Identifier, Statement]       = _
+    private var _definitionNode : Map[Identifier, Node]            = _
+    private var _dependencies   : Map[Identifier, Set[Identifier]] = _
+    private var _loops          : Set[List[Node]]                  = _
+
+    private def computeFlow(): Unit = {
+      _definitionStmt = Map.empty
+      _definitionNode = Map.empty
+      _dependencies   = Map.empty.withDefaultValue(Set.empty)
+
+      for (node <- nodes) {
+        val stmts = node.statements.flatMap(stmt => stmt match {
+          case Assign(id, expr) => List(id -> stmt)
+          case MultiAssign(ids, value) => ids.map(_ -> stmt)
+          case FieldAssign(obj: Identifier, _, value) => List(obj -> stmt)
+          case IndexAssign(arr: Identifier, idx, value) => List(arr -> stmt)
+          case _ => Nil
+        })
+
+        _definitionStmt ++= stmts
+        _definitionNode ++= stmts.map(p => p._1 -> node)
+        
+        for ((id, stmt) <- stmts;
+             d <- stmt match {
+               case Assign(_, expr) => expr.dependencies
+               case MultiAssign(_, value) => value.dependencies
+               case FieldAssign(_, _, value) => value.dependencies
+               case IndexAssign(_, idx, value) => idx.dependencies ++ value.dependencies
+               case _ => scala.sys.error("How can this be!?")
+             }) _dependencies += d -> (_dependencies(d) + id)
+      }
+
+      def loops(): Set[List[Node]] = {
+        def rec(seen: Set[Node], chain: List[Node]): Set[List[Node]] = {
+          val first = chain.head
+          val last = chain.last
+
+          if (!transitiveEdge(first, last)) Set.empty[List[Node]]
+          else if (first == last) Set(chain)
+          else if (seen(last)) Set.empty[List[Node]]
+          else next(last).flatMap(e => rec(seen + last, chain :+ e.to))
+        }
+
+        val allChains = nodes.flatMap(n => rec(Set.empty, n :: Nil))
+
+        def filterChains(seen: Set[Node], chains: List[List[Node]]): Set[List[Node]] = chains match {
+          case x :: xs =>
+            val newSeen = seen ++ x
+            filterChains(newSeen, chains.filter(_.forall(seen))) + x
+          case Nil => Set.empty[List[Node]]
+        }
+
+        filterChains(Set.empty, allChains.toList.sortBy(_.size))
+      }
+
+      _loops = loops()
+    }
+
+    def definingStatement(id: Identifier): Statement = withCache(_definitionStmt(id))
+    def definingNode(id: Identifier): Node = withCache(_definitionNode(id))
+    def dependencies(id: Identifier): Set[Identifier] = withCache(_dependencies(id))
+    def loops = withCache(_loops)
   }
 
   implicit object graphOps extends GraphOps {

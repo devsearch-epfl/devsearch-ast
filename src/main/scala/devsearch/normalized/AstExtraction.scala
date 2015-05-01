@@ -8,11 +8,7 @@ sealed trait Definition {
 }
 
 trait CodeDefinition extends Definition {
-  val graph: Graph
-}
-
-trait FunctionDefinition extends CodeDefinition {
-  def params: List[(Identifier, Type)]
+  val graph: Graph with ControlFlowGraph
 }
 
 trait AstExtraction extends ControlFlowGraphs { self =>
@@ -61,11 +57,6 @@ trait AstExtraction extends ControlFlowGraphs { self =>
   ) extends Definition(name) with devsearch.normalized.CodeDefinition {
     val graph = new Graph
   }
-
-  class FunctionDefinition (
-    name: String,
-    val params: List[(Identifier, Type)]
-  ) extends CodeDefinition(name) with devsearch.normalized.FunctionDefinition 
 
   case class NormalizationError(msg: String) extends RuntimeException(msg)
 
@@ -191,7 +182,10 @@ trait AstExtraction extends ControlFlowGraphs { self =>
         val named: List[(String, Option[Scope])] = Scope.this.named
 
         val definition: Def = {
-          val newDef = new FunctionDefinition(n, params)
+          val newDef = new CodeDefinition(n)
+          for ((id, tpe) <- params) {
+            newDef.graph.firstNode.add(Assign(id, New(tpe, Seq.empty)))
+          }
           Scope.this.definition.add(newDef)
           newDef
         }
