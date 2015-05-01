@@ -7,7 +7,6 @@ object Languages {
   val Java = "Java"
   val JavaScript = "JavaScript"
   val Scala = "Scala"
-  val NotSupported = "NotSupported"
 
   def isSupported(language: String): Boolean = {
     parser(language).isDefined
@@ -21,14 +20,14 @@ object Languages {
     case _ => None
   }
 
-  def guess(filename: String): String = {
+  def guess(filename: String): Option[String] = {
     val extension = FilenameUtils.getExtension(filename)
     extension match {
-      case "go" => Go
-      case "java" => Java
-      case "js" => JavaScript
-      case "scala" => Scala
-      case _ => NotSupported
+      case "go" => Some(Go)
+      case "java" => Some(Java)
+      case "js" => Some(JavaScript)
+      case "scala" => Some(Scala)
+      case _ => None
     }
   }
 }
