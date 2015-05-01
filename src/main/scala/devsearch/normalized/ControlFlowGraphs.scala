@@ -20,8 +20,8 @@ trait ControlFlowGraph { self: Graph =>
   def transitiveDominated(node: Node): Set[Node]
   def frontier(node: Node): Set[Node]
 
-  def definingStatement(id: Identifier): Statement
-  def definingNode(id: Identifier): Node
+  def definingStatement(id: Identifier): Option[Statement]
+  def definingNode(id: Identifier): Option[Node]
 
   def dependencies(id: Identifier): Set[Identifier]
 
@@ -272,29 +272,30 @@ trait ControlFlowGraphs { self =>
           val first = chain.head
           val last = chain.last
 
-          if (!transitiveEdge(first, last)) Set.empty[List[Node]]
-          else if (first == last) Set(chain)
+          if (!transitiveEdge(last, first)) Set.empty[List[Node]]
+          else if (first == last && chain.size > 1) Set(chain.init)
           else if (seen(last)) Set.empty[List[Node]]
           else next(last).flatMap(e => rec(seen + last, chain :+ e.to))
         }
 
         val allChains = nodes.flatMap(n => rec(Set.empty, n :: Nil))
 
-        def filterChains(seen: Set[Node], chains: List[List[Node]]): Set[List[Node]] = chains match {
+        def filterChains(seen: Set[Node], chains: List[List[Node]], found: List[List[Node]]): Set[List[Node]] = chains match {
           case x :: xs =>
             val newSeen = seen ++ x
-            filterChains(newSeen, chains.filter(_.forall(seen))) + x
-          case Nil => Set.empty[List[Node]]
+            val newChain = found.foldLeft(x)((acc, f) => if (acc.intersect(f).nonEmpty) (acc ++ f).distinct else acc)
+            filterChains(newSeen, chains.filterNot(_.forall(newSeen)), found :+ newChain)
+          case Nil => found.toSet
         }
 
-        filterChains(Set.empty, allChains.toList.sortBy(_.size))
+        filterChains(Set.empty, allChains.toList.sortBy(_.size), Nil)
       }
 
       _loops = loops()
     }
 
-    def definingStatement(id: Identifier): Statement = withCache(_definitionStmt(id))
-    def definingNode(id: Identifier): Node = withCache(_definitionNode(id))
+    def definingStatement(id: Identifier): Option[Statement] = withCache(_definitionStmt.get(id))
+    def definingNode(id: Identifier): Option[Node] = withCache(_definitionNode.get(id))
     def dependencies(id: Identifier): Set[Identifier] = withCache(_dependencies(id))
     def loops = withCache(_loops)
   }

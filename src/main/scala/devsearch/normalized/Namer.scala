@@ -15,14 +15,15 @@ class Namer(splitter: String = "") {
   private val originalNames = MutableMap.empty[String, String]
 
   def fresh(name: String): String = {
-    var counter = nameCounters.getOrElseUpdate(name, 0)
-    var freshName = name + splitter + (if (counter == 0 && splitter == "") "" else counter.toString)
+    var counter = nameCounters.get(name).map(_ + 1) getOrElse 0
+    var freshName = name + (if (counter == 0) "" else splitter + counter.toString)
     while (nameCounters.isDefinedAt(freshName)) {
       counter += 1
       freshName = name + splitter + counter
       nameCounters(name) = counter
     }
     originalNames(freshName) = name
+    nameCounters(name) = counter
     freshName
   }
 

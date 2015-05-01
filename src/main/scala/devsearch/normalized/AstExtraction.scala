@@ -65,7 +65,7 @@ trait AstExtraction extends ControlFlowGraphs { self =>
     // Note that all names generated here won't need to be freshened during the final
     // single-assignment pass since these should only be assigned once as they are
     // programmatically generated during code transformation
-    val namer = new Namer("$")
+    val namer = new Namer
 
     type Assignable = Either[Value => List[Statement], Identifier]
 
@@ -75,16 +75,16 @@ trait AstExtraction extends ControlFlowGraphs { self =>
           case value: Value =>
             cons(value).foreach(node.add(_))
           case _ =>
-            val id = Identifier(namer.fresh("x"))
-            node.add(Assign(id, expr))
+            val id = Identifier(namer.fresh("$x"))
+            node.add(Assign(id, expr).setPos(expr.pos))
             cons(id).foreach(node.add(_))
         }
         case _ =>
           val id = optAssign match {
             case Some(Right(id)) => id
-            case _ => Identifier(namer.fresh("x"))
+            case _ => Identifier(namer.fresh("$x")).setPos(expr.pos)
           }
-          node.add(Assign(id, expr))
+          node.add(Assign(id, expr).setPos(expr.pos))
       }
 
       node.statements.lastOption match {
@@ -110,11 +110,11 @@ trait AstExtraction extends ControlFlowGraphs { self =>
         }
 
         if (previous.isEmpty) {
-          node.setResult(Literal("null"))
+          node.setResult(Literal("null").setPos(node.statements.lastOption.map(_.pos) getOrElse ast.NoPosition))
         } else if (previous.size == 1) {
           node.setResult(previous.head)
         } else {
-          assign(node, None, Phi(previous.toList))
+          assign(node, None, Phi(previous.toList).setPos(previous.head.pos))
         }
       }
       node
@@ -218,9 +218,9 @@ trait AstExtraction extends ControlFlowGraphs { self =>
     def simpleType(tpe: ast.AST): Type = tpe match {
       case ast.ClassType(_, "List" | "LinkedList" | "ArrayList", _, _) => ListType
       case ast.ClassType(_, "Map" | "HashMap" | "LinkedHashMap", _, _) => MapType
-      case ast.ClassType(_, name, _, _) => ReferenceType(name)
-      case p: ast.PrimitiveType => PrimitiveType(p)
-      case f: ast.FunctionType => ReferenceType(namer.fresh("$fun"))
+      case ast.ClassType(_, name, _, _) => ReferenceType(name).setPos(tpe.pos)
+      case p: ast.PrimitiveType => PrimitiveType(p).setPos(tpe.pos)
+      case f: ast.FunctionType => ReferenceType(namer.fresh("$fun")).setPos(tpe.pos)
       case _ => UnknownType
     }
 
@@ -342,8 +342,8 @@ trait AstExtraction extends ControlFlowGraphs { self =>
         val it = iterLast.result
 
         val condNode = newNode
-        assign(condNode, None, Field(it, "hasNext"))
-        assign(condNode, None, Call(condNode.result, Seq.empty))
+        assign(condNode, None, Field(it, "hasNext").setPos(iterable.pos))
+        assign(condNode, None, Call(condNode.result, Seq.empty).setPos(iterable.pos))
         connect(iterLast, condNode, "foreach-cond")
 
         val restHead = newNode
@@ -367,13 +367,13 @@ trait AstExtraction extends ControlFlowGraphs { self =>
 
         catchs.foreach { case (catcher, block) =>
           val (optId, tpe, guard) = catcher match {
-            case ast.ValDef(_, name, _, tpe, _, _) => (Some(Right(Identifier(name))), simpleType(tpe), ast.Empty.NoExpr)
+            case ast.ValDef(_, name, _, tpe, _, _) => (Some(Right(Identifier(name).setPos(catcher.pos))), simpleType(tpe), ast.Empty.NoExpr)
             case ast.ExtractionValDef(_, ex @ ast.FunctionCall(r, _, _), _, _) => (None, simpleType(r), ex)
             case ast.ExtractionValDef(_, ex @ ast.Guarded(ast.FunctionCall(r, _, _), _), _, _) => (None, simpleType(r), ex)
             case ast.ExtractionValDef(_, guard, _, _) => (None, UnknownType, guard)
           }
 
-          val id = assign(catchsNode, optId, Catch(tpe)).result
+          val id = assign(catchsNode, optId, Catch(tpe).setPos(catcher.pos)).result
 
           val catchHead = newNode
           val catchLast = recPattern(catchHead, guard, id)
@@ -384,14 +384,14 @@ trait AstExtraction extends ControlFlowGraphs { self =>
         }
         restLast
 
-      case ast.Throw(expr) :: rest => // rest is dead code
+      case (t @ ast.Throw(expr)) :: rest => // rest is dead code
         val throwLast = recExpr(current, expr)
-        throwLast.add(Throw(throwLast.result))
+        throwLast.add(Throw(throwLast.result).setPos(t.pos))
         connect(throwLast, scope.catchStart, "throw")
         throwLast.lock
 
-      case ast.ValDef(_, name, _, _, expr, _) :: rest =>
-        val exprLast = recExpr(current, expr, Some(Right(Identifier(name))))
+      case (vd @ ast.ValDef(_, name, _, _, expr, _)) :: rest =>
+        val exprLast = recExpr(current, expr, Some(Right(Identifier(name).setPos(vd.pos))))
         recStmts(exprLast, rest)
 
       case ast.ExtractionValDef(_, pattern, _, expr) :: rest =>
@@ -402,11 +402,11 @@ trait AstExtraction extends ControlFlowGraphs { self =>
       case ast.Block(stmts) :: rest =>
         recStmts(current, stmts ++ rest)
 
-      case ast.Assert(expr, msg) :: rest =>
+      case (a @ ast.Assert(expr, msg)) :: rest =>
         val lastExpr = recExpr(current, expr)
         val failHead = newNode
         val failLast = recExpr(failHead, msg)
-        failLast.add(Throw(failLast.result))
+        failLast.add(Throw(failLast.result).setPos(a.pos))
         connect(lastExpr, failHead, "assert-false", Some(lastExpr.result -> false))
         connect(failLast, scope.catchStart, "assert-throw")
 
@@ -422,20 +422,20 @@ trait AstExtraction extends ControlFlowGraphs { self =>
         val lockLast = recExpr(current, lock)
         recStmts(lockLast, body :: rest)
 
-      case ast.SuperCall(_, _, args) :: rest =>
+      case (sc @ ast.SuperCall(_, _, args)) :: rest =>
         val (argsLast, argsResults) = args.foldLeft(current -> List.empty[Value]) { case ((last, acc), arg) =>
           val argLast = recExpr(last, arg)
           (argLast, acc :+ argLast.result)
         }
-        argsLast.add(Mutator(Call(Super(), argsResults)))
+        argsLast.add(Mutator(Call(Super().setPos(sc.pos), argsResults).setPos(sc.pos)).setPos(sc.pos))
         recStmts(argsLast, rest)
 
-      case ast.ThisCall(_, _, args) :: rest =>
+      case (tc @ ast.ThisCall(_, _, args)) :: rest =>
         val (argsLast, argsResults) = args.foldLeft(current -> List.empty[Value]) { case ((last, acc), arg) =>
           val argLast = recExpr(last, arg)
           (argLast, acc :+ argLast.result)
         }
-        argsLast.add(Mutator(Call(This(), argsResults)))
+        argsLast.add(Mutator(Call(This().setPos(tc.pos), argsResults).setPos(tc.pos)).setPos(tc.pos))
         recStmts(argsLast, rest)
 
       case (d: ast.Definition) :: rest =>
@@ -445,7 +445,13 @@ trait AstExtraction extends ControlFlowGraphs { self =>
       case (expr: ast.Expr) :: rest =>
         val exprLast = recExpr(current, expr)
         if (rest.isEmpty) exprLast else {
-          exprLast.add(Mutator(exprLast.result))
+          exprLast.statements.lastOption match {
+            case Some(Assign(_, e)) =>
+              exprLast._statements = exprLast.statements.init
+              exprLast.add(Mutator(e).setPos(e.pos))
+            case _ =>
+              exprLast.add(Mutator(exprLast.result).setPos(exprLast.result.pos))
+          }
           recStmts(exprLast, rest)
         }
     }
@@ -469,10 +475,10 @@ trait AstExtraction extends ControlFlowGraphs { self =>
         defs.foreach(recDef(_)(nscope))
 
       case ast.FunctionDef(_, name, _, _, params, _, body) =>
-        extractDef(body)(scope.inDef(name, params.map(vd => Identifier(vd.name) -> simpleType(vd.tpe))))
+        extractDef(body)(scope.inDef(name, params.map(vd => Identifier(vd.name).setPos(vd.pos) -> simpleType(vd.tpe))))
 
       case ast.ConstructorDef(_, _, _, params, body, _) =>
-        extractDef(body)(scope.inDef("$constructor", params.map(vd => Identifier(vd.name) -> simpleType(vd.tpe))))
+        extractDef(body)(scope.inDef("$constructor", params.map(vd => Identifier(vd.name).setPos(vd.pos) -> simpleType(vd.tpe))))
 
       case ast.ValDef(_, name, _, _, expr, _) =>
         extractDef(expr)(scope.inDef(name, Nil))
@@ -494,17 +500,17 @@ trait AstExtraction extends ControlFlowGraphs { self =>
     def recPattern(current: Node, expr: ast.Expr, selector: Value)(implicit scope: Scope { type Def <: CodeDefinition }): Node = expr match {
       case ast.Bind(name, e) =>
         val lastExpr = recPattern(current, e, selector)
-        assign(lastExpr, Some(Right(Identifier(name))), lastExpr.result)
+        assign(lastExpr, Some(Right(Identifier(name).setPos(expr.pos))), lastExpr.result)
 
       case ast.FunctionCall(receiver, _, args) =>
-        val id = assign(current, None, Unapply(simpleType(receiver), selector)).result
+        val id = assign(current, None, Unapply(simpleType(receiver), selector).setPos(expr.pos)).result
 
         val node = newNode
         val binders = args.map(a => a match {
-          case ast.Bind(name, expr) => Identifier(name) -> expr
-          case _ => Identifier(namer.fresh("$binder")) -> a
+          case ast.Bind(name, expr) => Identifier(name).setPos(a.pos) -> expr
+          case _ => Identifier(namer.fresh("$binder")).setPos(a.pos) -> a
         })
-        node.add(MultiAssign(binders.map(_._1), id))
+        node.add(MultiAssign(binders.map(_._1), id).setPos(expr.pos))
         connect(current, node, "match-unapply", Some(id -> true))
 
         binders.foldLeft(node) { case (node, (id, expr)) =>
@@ -529,7 +535,7 @@ trait AstExtraction extends ControlFlowGraphs { self =>
 
       case _ =>
         val exprLast = recExpr(current, expr)
-        val id = assign(exprLast, None, BinaryOp(selector, "==", exprLast.result)).result
+        val id = assign(exprLast, None, BinaryOp(selector, "==", exprLast.result).setPos(expr.pos)).result
         val node = newNode
         connect(current, node, "match-guard", Some(id -> true))
         node
@@ -541,14 +547,14 @@ trait AstExtraction extends ControlFlowGraphs { self =>
 
       case ast.UnaryOp(e, op, postfix) =>
         val opLast = recExpr(current, e)
-        assign(opLast, assignID, UnaryOp(opLast.result, op, postfix))
+        assign(opLast, assignID, UnaryOp(opLast.result, op, postfix).setPos(expr.pos))
 
       case ast.BinaryOp(left, op, right) =>
         val leftLast = recExpr(current, left)
         val leftResult = leftLast.result
 
         val rightLast = recExpr(leftLast, right)
-        assign(rightLast, assignID, BinaryOp(leftResult, op, rightLast.result))
+        assign(rightLast, assignID, BinaryOp(leftResult, op, rightLast.result).setPos(expr.pos))
 
       case ast.TernaryOp(cond, thenn, elze) =>
         recExpr(current, ast.If(cond, thenn, elze).fromAST(expr), assignID)
@@ -562,7 +568,7 @@ trait AstExtraction extends ControlFlowGraphs { self =>
           (argLast, acc :+ argLast.result)
         }
 
-        assign(argsLast, assignID, Call(receiverResult, argsResults))
+        assign(argsLast, assignID, Call(receiverResult, argsResults).setPos(expr.pos))
 
       case ast.ConstructorCall(tpe, args, _) =>
         val (argsLast, argsResults) = args.foldLeft(current -> List.empty[Value]) { case ((last, acc), arg) =>
@@ -570,23 +576,23 @@ trait AstExtraction extends ControlFlowGraphs { self =>
           (argLast, acc :+ argLast.result)
         }
 
-        assign(argsLast, assignID, New(simpleType(tpe), argsResults))
+        assign(argsLast, assignID, New(simpleType(tpe), argsResults).setPos(expr.pos))
 
       case ast.ArrayAccess(array, index) =>
         val arrayLast = recExpr(current, array)
         val arrayResult = arrayLast.result
 
         val indexLast = recExpr(arrayLast, index)
-        assign(indexLast, assignID, Index(arrayResult, indexLast.result))
+        assign(indexLast, assignID, Index(arrayResult, indexLast.result).setPos(expr.pos))
 
       case ast.ArrayLiteral(_, _, _, _) =>
-        assign(current, assignID, New(ListType, Nil))
+        assign(current, assignID, New(ListType, Nil).setPos(expr.pos))
 
       case ast.MultiLiteral(_) =>
-        assign(current, assignID, New(ListType, Nil))
+        assign(current, assignID, New(ListType, Nil).setPos(expr.pos))
 
       case ast.MapLiteral(_) =>
-        assign(current, assignID, New(MapType, Nil))
+        assign(current, assignID, New(MapType, Nil).setPos(expr.pos))
 
       case ast.Assign(lhs, rhs, optOp) =>
         val lhsLast = recExpr(current, lhs)
@@ -600,8 +606,8 @@ trait AstExtraction extends ControlFlowGraphs { self =>
 
             Left(optOp match {
               case Some(op) => (result: Value) => {
-                val tmpID = Identifier(namer.fresh("x"))
-                List(Assign(tmpID, BinaryOp(id, op, result)), assign(tmpID))
+                val tmpID = Identifier(namer.fresh("$x"))
+                List(Assign(tmpID, BinaryOp(id, op, result).setPos(rhs.pos)).setPos(expr.pos), assign(tmpID))
               }
               case None =>
                 // remove assignment of field to id since we're going to assign directly to the field
@@ -626,28 +632,28 @@ trait AstExtraction extends ControlFlowGraphs { self =>
         recExpr(current, ast.MethodAccess(tpe, "class", Nil).fromAST(expr))
 
       case ast.Ident(name) => assignID match {
-        case Some(_) => assign(current, assignID, Identifier(name))
-        case _ => current.setResult(Identifier(name))
+        case Some(_) => assign(current, assignID, Identifier(name).setPos(expr.pos))
+        case _ => current.setResult(Identifier(name).setPos(expr.pos))
       }
 
       case ast.MethodAccess(tpe, name, _) =>
         assign(current, assignID, simpleType(tpe) match {
-          case ReferenceType(str) => Field(Identifier(str), name)
-          case ListType => Field(Identifier("List"), name)
-          case MapType => Field(Identifier("Map"), name)
-          case _ => Field(Identifier("Type"), name)
+          case rt @ ReferenceType(str) => Field(Identifier(str).setPos(rt.pos), name).setPos(expr.pos)
+          case ListType => Field(Identifier("List").setPos(expr.pos), name).setPos(expr.pos)
+          case MapType => Field(Identifier("Map").setPos(expr.pos), name).setPos(expr.pos)
+          case _ => Field(Identifier("Type").setPos(expr.pos), name).setPos(expr.pos)
         })
 
       case ast.FieldAccess(receiver, name, _) =>
         val recLast = recExpr(current, receiver)
-        assign(recLast, assignID, Field(recLast.result, name))
+        assign(recLast, assignID, Field(recLast.result, name).setPos(expr.pos))
 
       case ast.InstanceOf(expr, tpe) =>
         val exprLast = recExpr(current, expr)
-        assign(exprLast, assignID, InstanceOf(exprLast.result, simpleType(tpe)))
+        assign(exprLast, assignID, InstanceOf(exprLast.result, simpleType(tpe)).setPos(expr.pos))
 
       case ast.SimpleLiteral(tpe, value) =>
-        current.setResult(Literal(value))
+        current.setResult(Literal(value).setPos(expr.pos))
 
       case ast.NullLiteral | ast.Wildcard =>
         current.setResult(Literal("null"))
@@ -656,10 +662,10 @@ trait AstExtraction extends ControlFlowGraphs { self =>
         current.setResult(Literal("Unit"))
 
       case ast.This(_) =>
-        current.setResult(This())
+        current.setResult(This().setPos(expr.pos))
 
       case ast.Super(_) =>
-        current.setResult(Super())
+        current.setResult(Super().setPos(expr.pos))
 
       case ifExpr : ast.If =>
         toResult(recStmt(current, ifExpr))
@@ -684,7 +690,7 @@ trait AstExtraction extends ControlFlowGraphs { self =>
 
         val freshName = namer.fresh("$fun")
         recDef(ast.FunctionDef(ast.Modifiers.NoModifiers, freshName, Nil, Nil, params, tpe, block).fromAST(fl))
-        assign(current, assignID, Identifier(freshName))
+        assign(current, assignID, Identifier(freshName).setPos(expr.pos))
 
       case a: ast.Annotation => 
         current

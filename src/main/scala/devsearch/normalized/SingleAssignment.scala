@@ -43,7 +43,9 @@ trait SingleAssignment extends AstExtraction {
 
           var nodeStmts: Map[Node, List[Statement]] = Map.empty.withDefaultValue(Nil)
           var nodePhis:  Map[Node, Map[String, (String, Map[Node, String])]] = defphis.map { case (node, ids) =>
-            node -> ids.map(id => id.name -> (id.name -> graph.prev(node).map(n => n.from -> id.name).toMap)).toMap
+            val idPhis = ids.map(id => id.name -> (id.name -> graph.prev(node).map(n => n.from -> id.name).toMap)).toMap
+            val filtered = idPhis.filter { case (name, (_, prevs)) => prevs.size > 1 }
+            node -> filtered
           }.withDefaultValue(Map.empty)
 
           def renameNode(node: Node, prevMapping: Map[String,String]): Unit = {
@@ -52,7 +54,7 @@ trait SingleAssignment extends AstExtraction {
             mapping ++= nodePhis(node).map(p => p._1 -> p._2._1)
 
             def mapped(map: Map[String,String]): Identifier => Identifier = {
-              id => Identifier(map.getOrElse(id.name, id.name))
+              id => Identifier(map.getOrElse(id.name, id.name)).setPos(id.pos)
             }
 
             nodeStmts += node -> (for (stmt <- node.statements) yield {
@@ -82,6 +84,8 @@ trait SingleAssignment extends AstExtraction {
 
             graph.dominated(node).foreach(renameNode(_, mapping))
           }
+
+          renameNode(graph.firstNode, Map.empty)
 
           val phiGraph = graph.map { node =>
             val phis = nodePhis(node).map { case (_, (nme, phis)) =>

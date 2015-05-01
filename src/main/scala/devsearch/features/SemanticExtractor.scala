@@ -26,11 +26,13 @@ object SemanticExtractor extends FeatureExtractor {
         }
 
         calls.flatMap(id => graph.definingStatement(id) match {
-          case caller @ Assign(_, Field(obj: Identifier, "add" | "push")) => graph.definingStatement(obj) match {
-            case Assign(_, New(ListType, _)) =>
-              val defNode = graph.definingNode(obj)
-              val depth = graph.loops.filter(loop => loop.contains(defNode))
-              if (depth == 1) List(MapCallFeature(data.location at caller.pos))
+          case Some(caller @ Assign(_, Field(obj: Identifier, m @ ("add" | "push" | "addAll" | "extend")))) => graph.definingStatement(obj) match {
+            case Some(Assign(_, New(ListType, _))) =>
+              val defNode = graph.definingNode(obj).get
+              val callNode = graph.definingNode(id).get
+              val depth: Int = graph.loops.filter(loop => loop.contains(callNode) && !loop.contains(defNode)).size
+              if (depth == 0) Nil
+              else if (depth == 1 && (m == "add" || m == "push")) List(MapCallFeature(data.location at caller.pos))
               else List(FlatMapCallFeature(data.location at caller.pos))
             case _ => Nil
           }
@@ -38,14 +40,19 @@ object SemanticExtractor extends FeatureExtractor {
         })
       }).flatten
 
-      val functionalFeatures = graph.nodes.flatMap(node => node.statements.flatMap {
-        case Assign(_, call @ Call(id: Identifier, Seq(arg))) => graph.definingStatement(id) match {
-          case Assign(_, Field(_, "map")) => List(MapCallFeature(data.location at call.pos))
-          case Assign(_, Field(_, "flatMap")) => List(FlatMapCallFeature(data.location at call.pos))
+      val functionalFeatures = graph.nodes.flatMap { node =>
+        val calls = node.statements.flatMap {
+          case Assign(_, Call(id: Identifier, Seq(arg))) => List(id)
+          case Mutator(Call(id: Identifier, Seq(arg))) => List(id)
           case _ => Nil
         }
-        case _ => Nil
-      })
+
+        calls.flatMap(id => graph.definingStatement(id) match {
+          case Some(Assign(_, Field(_, "map"))) => List(MapCallFeature(data.location at id.pos))
+          case Some(Assign(_, Field(_, "flatMap"))) => List(FlatMapCallFeature(data.location at id.pos))
+          case _ => Nil
+        })
+      }
 
       imperativeFeatures ++ functionalFeatures
     }
