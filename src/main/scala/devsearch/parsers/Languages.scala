@@ -8,7 +8,14 @@ object Languages {
   val JavaScript = "JavaScript"
   val Scala = "Scala"
 
-  def isSupported(language: String): Boolean = {
+  def isFileSupported(fileName: String): Boolean = {
+    guess(fileName) match {
+      case Some(language) => isLanguageSupported(language)
+      case None => false
+    }
+  }
+
+  def isLanguageSupported(language: String): Boolean = {
     parser(language).isDefined
   }
 
