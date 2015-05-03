@@ -766,8 +766,9 @@ object QueryParser extends Parser {
           case Try(block, catches, finalizer) =>
             ast.Try(wrapStatements(extractStmts(block), pos), catches.map { case c @ CaseDef(pat, guard, body) =>
               val guarded = ast.Guarded(extractExpr(pat), extractExpr(guard)).setPos(extractPosition(c.pos))
+              val valDef = ast.ExtractionValDef(ast.Modifiers.NoModifiers, guarded, Nil, ast.Empty.NoExpr).setPos(guarded.pos)
               val block = wrapStatements(extractStmts(body), extractPosition(c.pos))
-              guarded -> block
+              valDef -> block
             }, wrapStatements(extractStmts(finalizer), pos))
 
           case Function(vparams, body) =>
@@ -848,13 +849,17 @@ object QueryParser extends Parser {
             extractExpr(arg).appendComment(annot.toString)
 
           case Typed(expr, tpt) =>
-            val bound @ ast.Bind(name, _) = extractExpr(expr) match {
-              case b: ast.Bind => b
+            val (pat, guard) = extractExpr(expr) match {
+              case b @ ast.Bind(name, _) => b -> ast.Ident(name).setPos(b.pos)
+              case id: ast.Ident => id -> id
+              case w @ ast.Wildcard => w -> w
               case expr =>
-                val bound = ast.Bind(Names.DEFAULT, expr)
-                if (expr.pos != ast.NoPosition) bound.setPos(expr.pos) else bound.setPos(pos)
+                val bound = ast.Bind("typed", expr)
+                val p = if (expr.pos != ast.NoPosition) expr.pos else pos
+                bound.setPos(p) -> ast.Ident("typed").setPos(p)
             }
-            ast.Guarded(bound, ast.InstanceOf(ast.Ident(name).setPos(bound.pos), extractType(tpt)).setPos(bound.pos))
+            val p = if (guard.pos != ast.NoPosition) guard.pos else pos
+            ast.Guarded(pat, ast.InstanceOf(guard, extractType(tpt)).setPos(p))
 
           case Star(elem) => ast.UnaryOp(extractExpr(elem), "*", true)
 

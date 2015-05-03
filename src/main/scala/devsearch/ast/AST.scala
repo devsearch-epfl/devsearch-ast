@@ -7,6 +7,9 @@ sealed trait AST extends Positional with Commentable with java.io.Serializable {
     setPos(ast.pos)
   }
 
+  /** Tree foreach operator, @see [[Operators.foreach]] */
+  def foreach(f: AST => Unit): Unit = Operators.foreach(f)(this)
+
   /** Tree foldRight operator, @see [[Operators.foldRight]] */
   def foldRight[T](f: (AST, Seq[T]) => T): T = Operators.foldRight(f)(this)
 
@@ -116,6 +119,9 @@ case class ConstructorDef(modifiers: Modifiers, annotations: List[Annotation], t
  */
 case class FunctionDef(modifiers: Modifiers, name: String, annotations: List[Annotation], tparams: List[TypeDef], params: List[ValDef], tpe: Type, body: Block) extends Definition
 
+/** Super-trait of value definitions, namely `ValDef` and `ExtractionValDef` */
+sealed trait ValueDefinition extends Definition
+
 /**
  * Value definition
  *
@@ -124,7 +130,7 @@ case class FunctionDef(modifiers: Modifiers, name: String, annotations: List[Ann
  * - `val test = 1`
  * - `int a = 0;` (or also `int a;`
  */
-case class ValDef(modifiers: Modifiers, name: String, annotations: List[Annotation], tpe: Type, rhs: Expr, varArgs: Boolean = false) extends Definition
+case class ValDef(modifiers: Modifiers, name: String, annotations: List[Annotation], tpe: Type, rhs: Expr, varArgs: Boolean = false) extends ValueDefinition
 
 /**
  * Extraction value definition
@@ -132,7 +138,7 @@ case class ValDef(modifiers: Modifiers, name: String, annotations: List[Annotati
  * Some languages enable value definitions where the right hand side term is deconstructed into multiple defining values (such as unapply assignments in Scala).
  * These cases are stored in this case class, and can also take the form of tuple extraction.
  */
-case class ExtractionValDef(modifiers: Modifiers, pattern: Expr, annotations: List[Annotation], rhs: Expr) extends Definition
+case class ExtractionValDef(modifiers: Modifiers, pattern: Expr, annotations: List[Annotation], rhs: Expr) extends ValueDefinition
 
 /**
  * Initializer statement
@@ -354,7 +360,7 @@ case class ArrayAccess(array: Expr, index: Expr) extends Expr
  * Array creation in general. We try to stay flexible to accommodate typed arrays with dimensions and arrays that immediately fill out their
  * elements. For example:
  * - `new int[10]`
- * - `[1,2,3,4`]
+ * - `[1,2,3,4]`
  */
 case class ArrayLiteral(tpe: Type, annotations: List[Annotation], dimensions: List[Expr], elements: List[Expr]) extends Expr
 
@@ -494,7 +500,7 @@ case class Throw(expr: Expr) extends Expr
  * The catch block matchers are kept completely generic since the formats can widely vary
  * from one language to the next.
  */
-case class Try(tryBlock: Block, catchs: List[(AST, Block)], finallyBlock: Block) extends Expr
+case class Try(tryBlock: Block, catchs: List[(ValueDefinition, Block)], finallyBlock: Block) extends Expr
 
 /**
  * A flexible block structure
