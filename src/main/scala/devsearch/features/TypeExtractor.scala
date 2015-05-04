@@ -23,7 +23,7 @@ object TypeExtractor extends FeatureExtractor {
 
   // TODO: ignore common name parts, like com, org, org.apache, etc. to get matches with
   //       other languages that don't have long paths, like python
-  def extract(data: CodeFileData) = data.ast.collect[Feature] {
+  def extract(data: CodeFile) = data.ast.collect[Feature] {
     case ct @ ClassType(ReferenceExtractor(path), name, _, _) if name != Names.DEFAULT =>
       Set(TypeRefFeature(data.location at ct.pos, if (path == "") name else path + "." + name))
     case i @ Import(name, _, _) if name != Names.DEFAULT =>

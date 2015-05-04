@@ -6,7 +6,7 @@ import devsearch.parsers._
 
 trait CodeProvider {
   @inline def absResourcePath(path: String): String = CodeProvider.absResourcePath(path)
-  @inline def sampleCode(fileName: String): CodeFileData = CodeProvider.sampleCode(fileName)
+  @inline def sampleCode(fileName: String): CodeFile = CodeProvider.sampleCode(fileName)
   lazy val location = CodeProvider.location
   lazy val code = CodeProvider.code
 }
@@ -18,7 +18,7 @@ object CodeProvider {
     new java.io.File(fileURL.toURI).getAbsolutePath
   }
 
-  def sampleCode(fileName: String): CodeFileData = {
+  def sampleCode(fileName: String): CodeFile = {
     val filePath = absResourcePath("/samples/" + fileName)
     val parser = fileName.substring(fileName.lastIndexOf(".") + 1, fileName.length) match {
       case "java" => JavaParser
@@ -30,7 +30,7 @@ object CodeProvider {
 
     val source = new FileSource(filePath)
     val location = CodeFileLocation("unknown_user", "unknown_repo", fileName)
-    CodeFileData(source.contents.length, parser.language, location, parser.parse(source))
+    CodeFile(parser.language, location, parser.parse(source))
   }
 
   lazy val location = CodeFileLocation("unknown_user", "unknown_repo", "JavaConcepts.java")

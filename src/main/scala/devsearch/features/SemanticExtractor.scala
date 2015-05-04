@@ -12,7 +12,7 @@ case class FlatMapCallFeature(position: CodePiecePosition) extends Feature(posit
 
 object SemanticExtractor extends FeatureExtractor {
 
-  def extract(data: CodeFileData) = {
+  def extract(data: CodeFile) = {
     val normalized = Normalizer(data.ast)
 
     def extractFeatures(code: CodeDefinition) = {

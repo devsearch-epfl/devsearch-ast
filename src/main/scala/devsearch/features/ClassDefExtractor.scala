@@ -11,7 +11,7 @@ case class InheritanceFeature(position: CodePiecePosition, className: String, su
 }
 
 object ClassDefExtractor extends FeatureExtractor {
-  def extract(data: CodeFileData): Set[Feature] = data.ast.collect[Feature] {
+  def extract(data: CodeFile): Set[Feature] = data.ast.collect[Feature] {
     case cd @ ClassDef(_, name, _, _, _, _, _) if name != Names.DEFAULT =>
       try {
         Set(ClassNameFeature(data.location at cd.pos, name)) ++
