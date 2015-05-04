@@ -78,8 +78,9 @@ object FeatureRecognizer extends (CodeFileData => TraversableOnce[Feature]) with
 
   lazy val extractors = List(
     ClassDefExtractor,
-    SemanticExtractor,
     ImportExtractor,
+    FieldExtractor,
+    SemanticExtractor,
     StructuralExtractor,
     FunDefExtractor,
     TypeExtractor,
