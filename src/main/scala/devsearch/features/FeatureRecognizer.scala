@@ -99,10 +99,10 @@ case class CodePiecePosition(location: CodeFileLocation, line: Int) extends java
   override def toString = location.toString + ":" + line
 }
 
-case class CodeFileData(size: Long, language: String, location: CodeFileLocation, ast: AST) extends java.io.Serializable
+case class CodeFileData(language: String, location: CodeFileLocation, ast: AST) extends java.io.Serializable
 
 object CodeFileData {
-  def apply(size: Long, language: String, location: CodeFileLocation, source: String): CodeFileData = {
+  def apply(language: String, location: CodeFileLocation, source: String): CodeFileData = {
     val parserOption = Languages.parser(language)
     val ast = parserOption match {
       case Some(parser) =>
@@ -112,7 +112,6 @@ object CodeFileData {
 
       case None => Empty[AST]
     }
-    new CodeFileData(size, language, location, ast)
+    new CodeFileData(language, location, ast)
   }
 }
-

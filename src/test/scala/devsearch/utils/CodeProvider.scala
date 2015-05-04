@@ -30,7 +30,7 @@ object CodeProvider {
 
     val source = new FileSource(filePath)
     val location = CodeFileLocation("unknown_user", "unknown_repo", fileName)
-    CodeFileData(source.contents.length, parser.language, location, parser.parse(source))
+    CodeFileData(parser.language, location, parser.parse(source))
   }
 
   lazy val location = CodeFileLocation("unknown_user", "unknown_repo", "JavaConcepts.java")
