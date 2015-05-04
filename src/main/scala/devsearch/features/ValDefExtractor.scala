@@ -25,7 +25,7 @@ object ValDefExtractor extends FeatureExtractor {
     }
   }
 
-  def extract(data: CodeFileData) = data.ast.collect[Feature] {
+  def extract(data: CodeFile) = data.ast.collect[Feature] {
     case valueDefinition: ValDef if valueDefinition.name != Names.DEFAULT => Set(
       TypedVarFeature(data.location at valueDefinition.pos, convertTypeToString(valueDefinition.tpe), valueDefinition.name)
     )

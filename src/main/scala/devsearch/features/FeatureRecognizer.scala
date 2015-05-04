@@ -64,7 +64,7 @@ object Feature {
 trait FeatureExtractor extends java.io.Serializable {
 
   /** Extract all features of a given type from the given code file */
-  def extract(data: CodeFileData): Set[Feature]
+  def extract(data: CodeFile): Set[Feature]
 }
 
 /**
@@ -74,7 +74,7 @@ trait FeatureExtractor extends java.io.Serializable {
  * from a given code file. This procedure is performed in a framework-agnostic way and it is the
  * job of the caller to parallelize over multiple code files.
  */
-object FeatureRecognizer extends (CodeFileData => TraversableOnce[Feature]) with java.io.Serializable {
+object FeatureRecognizer extends (CodeFile => TraversableOnce[Feature]) with java.io.Serializable {
 
   lazy val extractors = List(
     ClassDefExtractor,
@@ -87,7 +87,7 @@ object FeatureRecognizer extends (CodeFileData => TraversableOnce[Feature]) with
     ValDefExtractor
   )
 
-  def apply(data: CodeFileData) = extractors.flatMap(_.extract(data))
+  def apply(data: CodeFile) = extractors.flatMap(_.extract(data))
 }
 
 case class CodeFileLocation(user: String, repoName: String, fileName: String) extends java.io.Serializable {
@@ -100,10 +100,10 @@ case class CodePiecePosition(location: CodeFileLocation, line: Int) extends java
   override def toString = location.toString + ":" + line
 }
 
-case class CodeFileData(language: String, location: CodeFileLocation, ast: AST) extends java.io.Serializable
+case class CodeFile(language: String, location: CodeFileLocation, ast: AST) extends java.io.Serializable
 
-object CodeFileData {
-  def apply(language: String, location: CodeFileLocation, source: String): CodeFileData = {
+object CodeFile {
+  def apply(language: String, location: CodeFileLocation, source: String): CodeFile = {
     val parserOption = Languages.parser(language)
     val ast = parserOption match {
       case Some(parser) =>
@@ -113,6 +113,6 @@ object CodeFileData {
 
       case None => Empty[AST]
     }
-    new CodeFileData(language, location, ast)
+    new CodeFile(language, location, ast)
   }
 }

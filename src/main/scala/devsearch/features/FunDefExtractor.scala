@@ -27,7 +27,7 @@ case class ThrowsFeature(position: CodePiecePosition, exception: String) extends
 }
 
 object FunDefExtractor extends FeatureExtractor {
-  def extract(data: CodeFileData) = data.ast.collect[Feature] {
+  def extract(data: CodeFile) = data.ast.collect[Feature] {
     case fd @ FunctionDef(mods, name, annotations, tparams, params, _, _) =>
       // extract function name feature
       (if (name != Names.DEFAULT) Set(FunNameFeature(data.location at fd.pos, name)) else Set.empty) ++

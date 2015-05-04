@@ -12,7 +12,7 @@ case class FunctionFieldFeature(position: CodePiecePosition, name: String, args:
 
 object FieldExtractor extends FeatureExtractor {
 
-  def extract(data: CodeFileData) = data.ast.collect[Feature] {
+  def extract(data: CodeFile) = data.ast.collect[Feature] {
     case fa @ FieldAccess(_, name, _) if name != Names.DEFAULT =>
       Set(FieldFeature(data.location at fa.pos, name))
     case FunctionCall(fa @ FieldAccess(_, name, _), _, args) if name != Names.DEFAULT =>
