@@ -7,6 +7,7 @@ object Languages {
   val Java = "Java"
   val JavaScript = "JavaScript"
   val Scala = "Scala"
+  def supportedLanguages(): List[String] = List(Go, Java, JavaScript, Scala)
 
   def isFileSupported(fileName: String): Boolean = {
     guess(fileName) match {
