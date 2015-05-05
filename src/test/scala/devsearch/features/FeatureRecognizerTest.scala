@@ -30,7 +30,7 @@ class FeatureRecognizerTest extends FlatSpec {
 
     assert(
       code match {
-        case cf @ CodeFile(lang, loc, ast) => true
+        case cf @ CodeFile(lang, loc, ast) => lang == Languages.Java && loc == location
         case _ => false
       }
     )
