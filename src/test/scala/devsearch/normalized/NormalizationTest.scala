@@ -25,4 +25,8 @@ class NormalizationTest extends FlatSpec with CodeProvider {
   it should "work on fcktextcolorcommand.js" in {
     Normalizer(sampleCode("fcktextcolorcommand.js").ast)
   }
+
+  it should "work on SlickQueryContext.scala" in {
+    Normalizer(sampleCode("SlickQueryContext.scala").ast)
+  }
 }
