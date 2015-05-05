@@ -1,44 +1,6 @@
 package devsearch.features
 
-import devsearch.ast._
-import devsearch.parsers._
-
-case class CodeFileLocation(user: String, repoName: String, fileName: String) extends java.io.Serializable {
-  def at(pos: Position) = CodePiecePosition(this, pos.line)
-  def at(line: Int) = CodePiecePosition(this, line)
-  override def toString = user + "/" + repoName + "/" + fileName
-}
-
-case class CodePiecePosition(location: CodeFileLocation, line: Int) extends java.io.Serializable {
-  override def toString = location.toString + ":" + line
-}
-
-trait CodeFile {
-  def language: String
-  def location: CodeFileLocation
-  def ast: AST
-}
-
-object CodeFile {
-  private case class CodeFileImpl(language: String, location: CodeFileLocation, ast: AST) extends CodeFile
-
-  def apply(language: String, location: CodeFileLocation, source: Source): CodeFile = {
-    val parserOption = Languages.parser(language)
-    val ast = parserOption match {
-      case Some(parser) =>
-        scala.util.Try(
-          parser.parse(source)
-        ) getOrElse Empty[AST]
-
-      case None => Empty[AST]
-    }
-    new CodeFileImpl(language, location, ast)
-  }
-
-  def unapply(c: CodeFile) : Option[(String, CodeFileLocation, AST)] = {
-    Some((c.language, c.location, c.ast))
-  }
-}
+import devsearch.parsers.Languages
 
 /**
  * Base feature class
@@ -99,7 +61,6 @@ object Feature {
  * just the AST.
  */
 trait FeatureExtractor extends java.io.Serializable {
-
   /** Extract all features of a given type from the given code file */
   def extract(data: CodeFile): Set[Feature]
 }
@@ -112,7 +73,6 @@ trait FeatureExtractor extends java.io.Serializable {
  * job of the caller to parallelize over multiple code files.
  */
 object FeatureRecognizer extends (CodeFile => TraversableOnce[Feature]) with java.io.Serializable {
-
   lazy val extractors = Set(
     ClassDefExtractor,
     ImportExtractor,
@@ -126,4 +86,3 @@ object FeatureRecognizer extends (CodeFile => TraversableOnce[Feature]) with jav
 
   def apply(data: CodeFile): Set[Feature] = extractors.flatMap(_.extract(data))
 }
-
