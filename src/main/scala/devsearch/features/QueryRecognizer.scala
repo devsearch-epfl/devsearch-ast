@@ -1,24 +1,25 @@
 package devsearch.features
 
-import devsearch.ast.ContentsSource
 import devsearch.parsers.Languages
 
 object QueryRecognizer {
-  def findCodeFile(query: String): Option[CodeFile] = {
+  def apply(query: String): Option[CodeFile] = {
     scala.util.Try {
       Languages.supportedLanguages().toList.map { language =>
-        val extensionWithDot = Languages.extension(language) match {
+        // Some parsers (Go) need a valid file name to parse correctly, so we
+        // generate one for the query.
+        val generatedFileName = "file" + (Languages.extension(language) match {
           case Some(extension) => "." + extension
           case None => ""
-        }
+        })
 
         CodeFile(
           language,
-          CodeFileLocation("dummy", "dummy", "dummy"),
-          new ContentsSource("unique_filename" + extensionWithDot, query)
+          CodeFileLocation("dummy_user", "dummy_repo", generatedFileName),
+          query
         )
       }.map { codeFile =>
-        // Since Scala parser is more permissive, we reduce its score for the comparison
+        // Scala parser is more permissive, so we reduce its score for the comparison.
         val weight: Double = codeFile.language match {
           case Languages.Scala => 0.7
           case _ => 1.0

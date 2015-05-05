@@ -1,6 +1,6 @@
 package devsearch.features
 
-import devsearch.ast.{Empty, Source, AST, Position}
+import devsearch.ast._
 import devsearch.parsers.Languages
 
 case class CodeFileLocation(user: String, repoName: String, fileName: String) extends java.io.Serializable {
@@ -33,6 +33,12 @@ object CodeFile {
       case None => Empty[AST]
     }
     new CodeFileImpl(language, location, ast)
+  }
+
+  def apply(language: String, location: CodeFileLocation, sourceText: String): CodeFile = {
+    val source = new ContentsSource(location.fileName, sourceText)
+
+    CodeFile(language, location, source)
   }
 
   def unapply(c: CodeFile) : Option[(String, CodeFileLocation, AST)] = {

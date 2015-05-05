@@ -1,7 +1,6 @@
 package devsearch.features
 
-import devsearch.ast.ContentsSource
-import devsearch.parsers.{GoParser, Languages}
+import devsearch.parsers.Languages
 import org.scalatest.FlatSpec
 
 class QueryRecognizerTest extends FlatSpec {
@@ -13,7 +12,7 @@ class QueryRecognizerTest extends FlatSpec {
                      |    command._Panel.Hide() ;
                      |}""".stripMargin
 
-    assert(QueryRecognizer.findCodeFile(jsSource) match {
+    assert(QueryRecognizer(jsSource) match {
       case Some(codeFile) => codeFile.language == Languages.JavaScript
       case None => false
     })
@@ -37,7 +36,7 @@ class QueryRecognizerTest extends FlatSpec {
                        |    System.out.println("Could not load image: " + path);
                        |}""".stripMargin
 
-    assert(QueryRecognizer.findCodeFile(javaSource) match {
+    assert(QueryRecognizer(javaSource) match {
       case Some(codeFile) => codeFile.language == Languages.Java
       case None => false
     })
@@ -64,7 +63,7 @@ class QueryRecognizerTest extends FlatSpec {
                      |  fmt.Println("sum:",sum)
                      |}""".stripMargin
 
-    assert(QueryRecognizer.findCodeFile(goSource) match {
+    assert(QueryRecognizer(goSource) match {
       case Some(codeFile) => codeFile.language == Languages.Go
       case None => false
     })
@@ -81,7 +80,7 @@ class QueryRecognizerTest extends FlatSpec {
                         |  ops.newGraph(newNodes, newEdges)
                         |}""".stripMargin
 
-    assert(QueryRecognizer.findCodeFile(scalaSource) match {
+    assert(QueryRecognizer(scalaSource) match {
       case Some(codeFile) => codeFile.language == Languages.Scala
       case None => false
     })
