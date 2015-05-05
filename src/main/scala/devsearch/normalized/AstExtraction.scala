@@ -91,7 +91,9 @@ trait AstExtraction extends ControlFlowGraphs { self =>
         case Some(Assign(id, _)) => node.setResult(id)
         case Some(FieldAssign(_, _, value)) => node.setResult(value)
         case Some(IndexAssign(_, _, value)) => node.setResult(value)
-        case _ => throw NormalizationError("Missformed assignment statement")
+        case Some(t @ Throw(_)) => node.setResult(Literal("null").setPos(t.pos))
+        case last => throw NormalizationError("Missformed assignment statement: " + last +
+          " at position " + last.map(_.pos).getOrElse(ast.NoPosition))
       }
     }
 
@@ -456,10 +458,10 @@ trait AstExtraction extends ControlFlowGraphs { self =>
         }
     }
 
-    def extractDef(stmt: ast.Statement)(implicit scope: Scope { type Def <: CodeDefinition }): Unit = {
+    def extractDef(stmt: ast.Statement, exprPosition: Boolean = false)(implicit scope: Scope { type Def <: CodeDefinition }): Unit = {
       val defHead = scope.definition.graph.firstNode
       val defLast = stmt match {
-        case expr: ast.Expr => recExpr(defHead, expr)
+        case expr: ast.Expr if exprPosition => recExpr(defHead, expr)
         case _ => recStmt(defHead, stmt)
       }
       connect(defLast, scope.definition.graph.lastNode, "last")
@@ -481,7 +483,7 @@ trait AstExtraction extends ControlFlowGraphs { self =>
         extractDef(body)(scope.inDef("$constructor", params.map(vd => Identifier(vd.name).setPos(vd.pos) -> simpleType(vd.tpe))))
 
       case ast.ValDef(_, name, _, _, expr, _) =>
-        extractDef(expr)(scope.inDef(name, Nil))
+        extractDef(expr, true)(scope.inDef(name, Nil))
 
       case ast.ExtractionValDef(_, pattern, _, expr) =>
         val dscope = scope.inDef(namer.fresh("$pat"), Nil)
@@ -690,7 +692,12 @@ trait AstExtraction extends ControlFlowGraphs { self =>
 
         val freshName = namer.fresh("$fun")
         recDef(ast.FunctionDef(ast.Modifiers.NoModifiers, freshName, Nil, Nil, params, tpe, block).fromAST(fl))
-        assign(current, assignID, Identifier(freshName).setPos(expr.pos))
+        val id = Identifier(freshName).setPos(expr.pos)
+        if (assignID.isDefined) {
+          assign(current, assignID, id)
+        } else {
+          current.setResult(id)
+        }
 
       case a: ast.Annotation => 
         current

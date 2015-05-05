@@ -1,11 +1,7 @@
 package devsearch.features
 
-import devsearch.utils._
 import org.scalatest.FlatSpec
 
-/**
- * Created by hubi on 4/15/15.
- */
 class FeatureEncodingTest extends FlatSpec {
 
   "Feature.encode" should "escape correctly commas and backslashes." in {

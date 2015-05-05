@@ -20,6 +20,13 @@ object Languages {
     parser(language).isDefined
   }
 
+  def parserFromFile(fileName: String): Option[Parser] = {
+    guess(fileName) match {
+      case Some(language) => parser(language)
+      case None => None
+    }
+  }
+
   def parser(language: String): Option[Parser] = language match {
     case Go => Some(GoParser)
     case Java => Some(JavaParser)
