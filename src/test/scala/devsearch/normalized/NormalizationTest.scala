@@ -1,7 +1,7 @@
 package devsearch.normalized
 
+import devsearch.features.{FeatureRecognizer, CodeFile}
 import devsearch.utils._
-import devsearch.parsers._
 import org.scalatest._
 
 class NormalizationTest extends FlatSpec with CodeProvider {

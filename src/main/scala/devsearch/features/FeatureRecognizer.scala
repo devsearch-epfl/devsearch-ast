@@ -76,7 +76,7 @@ trait FeatureExtractor extends java.io.Serializable {
  */
 object FeatureRecognizer extends (CodeFile => TraversableOnce[Feature]) with java.io.Serializable {
 
-  lazy val extractors = List(
+  lazy val extractors = Set(
     ClassDefExtractor,
     ImportExtractor,
     FieldExtractor,
@@ -87,7 +87,13 @@ object FeatureRecognizer extends (CodeFile => TraversableOnce[Feature]) with jav
     ValDefExtractor
   )
 
-  def apply(data: CodeFile) = extractors.flatMap(_.extract(data))
+  def apply(data: CodeFile): Set[Feature] = {
+    extractors.flatMap { case extractor =>
+      scala.util.Try {
+        extractor.extract(data)
+      }.getOrElse(Set[Feature]())
+    }
+  }
 }
 
 case class CodeFileLocation(user: String, repoName: String, fileName: String) extends java.io.Serializable {
