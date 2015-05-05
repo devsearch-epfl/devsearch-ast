@@ -87,13 +87,7 @@ object FeatureRecognizer extends (CodeFile => TraversableOnce[Feature]) with jav
     ValDefExtractor
   )
 
-  def apply(data: CodeFile): Set[Feature] = {
-    extractors.flatMap { case extractor =>
-      scala.util.Try {
-        extractor.extract(data)
-      }.getOrElse(Set[Feature]())
-    }
-  }
+  def apply(data: CodeFile): Set[Feature] = extractors.flatMap(_.extract(data))
 }
 
 case class CodeFileLocation(user: String, repoName: String, fileName: String) extends java.io.Serializable {
