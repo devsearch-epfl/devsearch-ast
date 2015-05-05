@@ -1,6 +1,7 @@
 package devsearch.features
 
-import devsearch.parsers.Languages
+import devsearch.ast.ContentsSource
+import devsearch.parsers.{GoParser, Languages}
 import org.scalatest.FlatSpec
 
 class QueryRecognizerTest extends FlatSpec {
@@ -43,20 +44,24 @@ class QueryRecognizerTest extends FlatSpec {
   }
 
   it should "recognize Go files" in {
-    val goSource = """func NewGridFont(texture *Texture, cellWidth, cellHeight int) *Font {
-                     |    i := 0
-                     |    glyphs := make(map[rune]*glyph)
+    val goSource = """// Copyright 2014-2015 The project AUTHORS. All rights reserved.
+                     |// Use of this source code is governed by a BSD-style
+                     |// license that can be found in the LICENSE file.
                      |
-                     |    for y := 0; y < int(texture.Height())/cellHeight; y++ {
-                     |        for x := 0; x < int(texture.Width())/cellWidth; x++ {
-                     |            g := &glyph{xadvance: float32(cellWidth)}
-                     |            g.region = NewRegion(texture, x*cellWidth, y*cellHeight, cellWidth, cellHeight)
-                     |            glyphs[rune(i)] = g
-                     |            i += 1
-                     |        }
-                     |    }
+                     |package main
                      |
-                     |    return &Font{glyphs}
+                     |import (
+                     |  "fmt"
+                     |)
+                     |
+                     |func test() {
+                     |  t := true
+                     |  nums := []int{2, 3, 4}
+                     |  sum := 0
+                     |  for _, num := range nums {
+                     |    sum += num
+                     |  }
+                     |  fmt.Println("sum:",sum)
                      |}""".stripMargin
 
     assert(QueryRecognizer.findCodeFile(goSource) match {
