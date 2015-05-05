@@ -13,9 +13,8 @@ class SemanticExtractorTest extends FlatSpec {
       l.flatMap(f)
     """)
 
-    val ast = QueryParser.parse(source)
     val location = CodeFileLocation("unknown_repo", "unknown_user", "Test.scala")
-    val code = new CodeFile("unknown_language", location, ast)
+    val code = CodeFile(Languages.Scala, location, source)
     assert(SemanticExtractor.extract(code) == Set(
       MapCallFeature(location at 1),
       MapCallFeature(location at 2),
@@ -31,9 +30,8 @@ class SemanticExtractorTest extends FlatSpec {
       }
     """)
 
-    val ast = JavaParser.parse(source)
     val location = CodeFileLocation("unknown_repo", "unknown_user", "Test.java")
-    val code = new CodeFile("unknown_language", location, ast)
+    val code = CodeFile(Languages.Java, location, source)
     assert(SemanticExtractor.extract(code) == Set(
       MapCallFeature(location at 4)
     ))
@@ -55,9 +53,8 @@ class SemanticExtractorTest extends FlatSpec {
       }
     """)
 
-    val ast = JavaParser.parse(source)
     val location = CodeFileLocation("unknown_user", "unknown_repo", "Test2.java")
-    val code = CodeFile("unknown_language", location, ast)
+    val code = CodeFile(Languages.Java, location, source)
     assert(SemanticExtractor.extract(code) == Set(
       FlatMapCallFeature(location at 6),
       FlatMapCallFeature(location at 12)

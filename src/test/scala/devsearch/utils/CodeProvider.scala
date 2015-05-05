@@ -20,17 +20,13 @@ object CodeProvider {
 
   def sampleCode(fileName: String): CodeFile = {
     val filePath = absResourcePath("/samples/" + fileName)
-    val parser = fileName.substring(fileName.lastIndexOf(".") + 1, fileName.length) match {
-      case "java" => JavaParser
-      case "js" => JsParser
-      case "scala" => QueryParser
-      case "go" => GoParser
-      case ext => sys.error("Unknown extension: " + ext)
-    }
+    Languages.guess(fileName) match {
+      case Some(language) =>
+        val location = CodeFileLocation("unknown_user", "unknown_repo", fileName)
+        CodeFile(language, location, new FileSource(filePath))
 
-    val source = new FileSource(filePath)
-    val location = CodeFileLocation("unknown_user", "unknown_repo", fileName)
-    CodeFile(parser.language, location, parser.parse(source))
+      case None => sys.error("Unknown extension for filename: " + fileName)
+    }
   }
 
   lazy val location = CodeFileLocation("unknown_user", "unknown_repo", "JavaConcepts.java")

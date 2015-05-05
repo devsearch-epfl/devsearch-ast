@@ -1,7 +1,7 @@
 package devsearch.normalized
 
+import devsearch.features.{FeatureRecognizer, CodeFile}
 import devsearch.utils._
-import devsearch.parsers._
 import org.scalatest._
 
 class NormalizationTest extends FlatSpec with CodeProvider {
@@ -24,5 +24,9 @@ class NormalizationTest extends FlatSpec with CodeProvider {
 
   it should "work on fcktextcolorcommand.js" in {
     Normalizer(sampleCode("fcktextcolorcommand.js").ast)
+  }
+
+  it should "work on SlickQueryContext.scala" in {
+    Normalizer(sampleCode("SlickQueryContext.scala").ast)
   }
 }
