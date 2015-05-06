@@ -7,7 +7,23 @@ object Languages {
   val Java = "Java"
   val JavaScript = "JavaScript"
   val Scala = "Scala"
-  def supportedLanguages(): Set[String] = Set(Go, Java, JavaScript, Scala)
+
+  case class LangSpec(extension: String, parser: Parser)
+
+  val orderedLangList = List(
+    (Go, LangSpec("go", GoParser)),
+    (JavaScript, LangSpec("js", JsParser)),
+    (Java, LangSpec("java", JavaParser)),
+    (Scala, LangSpec("scala", QueryParser))
+  )
+
+  val langMap = orderedLangList.toMap
+
+  def orderedSupportedLanguages(): List[String] = {
+    orderedLangList.map(_._1)
+  }
+
+  def supportedLanguages(): Set[String] = langMap.keySet
 
   def isFileSupported(fileName: String): Boolean = {
     guess(fileName) match {
@@ -17,7 +33,7 @@ object Languages {
   }
 
   def isLanguageSupported(language: String): Boolean = {
-    parser(language).isDefined
+    langMap.contains(language)
   }
 
   def parserFromFile(fileName: String): Option[Parser] = {
@@ -27,22 +43,23 @@ object Languages {
     }
   }
 
-  def parser(language: String): Option[Parser] = language match {
-    case Go => Some(GoParser)
-    case Java => Some(JavaParser)
-    case JavaScript => Some(JsParser)
-    case Scala => Some(QueryParser)
-    case _ => None
+  def parser(language: String): Option[Parser] = {
+    langMap.get(language) match {
+      case Some(langSpec) => Some(langSpec.parser)
+      case _ => None
+    }
   }
 
   def guess(filename: String): Option[String] = {
     val extension = FilenameUtils.getExtension(filename)
-    extension match {
-      case "go" => Some(Go)
-      case "java" => Some(Java)
-      case "js" => Some(JavaScript)
-      case "scala" => Some(Scala)
-      case _ => None
-    }
+    langMap.map(_.swap).map { case (langSpec, language) =>
+      (langSpec.extension, language)
+    }.get(extension)
+  }
+
+  def extension(language: String): Option[String] = {
+    langMap.map { case (language, langSpec) =>
+      (language, langSpec.extension)
+    }.get(language)
   }
 }
