@@ -154,4 +154,14 @@ class QueryParserTest extends FlatSpec {
     // just make sure parser doesn't crash
     QueryParser.parse(source)
   }
+
+  it should "not loop infinitely on unexpected JavaScript source code" in {
+    val mySource = """var i = 10;
+                     |var j = 10;
+                     |for (var x = 1; x < 10; x++) {
+                     |   console.log("wtf");
+                     |}""".stripMargin
+
+    assert(QueryParser.parse(new ContentsSource("unexpected.js", mySource)) == Empty[AST])
+  }
 }
