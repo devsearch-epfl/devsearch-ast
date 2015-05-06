@@ -58,8 +58,8 @@ object Languages {
   }
 
   def extension(language: String): Option[String] = {
-    langMap.map { case (language, langSpec) =>
-      (language, langSpec.extension)
+    langMap.map { case (lang, langSpec) =>
+      (lang, langSpec.extension)
     }.get(language)
   }
 }
