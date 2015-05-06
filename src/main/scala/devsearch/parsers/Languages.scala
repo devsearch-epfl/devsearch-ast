@@ -10,12 +10,18 @@ object Languages {
 
   case class LangSpec(extension: String, parser: Parser)
 
-  val langMap = Map(
+  val orderedLangList = List(
     (Go, LangSpec("go", GoParser)),
-    (Java, LangSpec("java", JavaParser)),
     (JavaScript, LangSpec("js", JsParser)),
+    (Java, LangSpec("java", JavaParser)),
     (Scala, LangSpec("scala", QueryParser))
   )
+
+  val langMap = orderedLangList.toMap
+
+  def orderedSupportedLanguages(): List[String] = {
+    orderedLangList.map(_._1)
+  }
 
   def supportedLanguages(): Set[String] = langMap.keySet
 
