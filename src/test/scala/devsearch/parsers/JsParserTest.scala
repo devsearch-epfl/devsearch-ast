@@ -424,9 +424,6 @@ class JsParserTest extends FunSuite with ParserTest {
     assert(JsParser.parse(source) == FunctionCall(Ident("$$regexp"),List(),List(SimpleLiteral(PrimitiveTypes.String," "))))
   }
 
-  /**
-   * Test on a specific file that failed on Spark
-   */
   def checkInfLoopFile(): Unit = {
     val eventFilePath = CodeProvider.absResourcePath("/samples/event.js")
     assert(JsParser.parse(eventFilePath) != NoDef)
@@ -451,5 +448,15 @@ class JsParserTest extends FunSuite with ParserTest {
 
   test("parsing should not loop infinitely") {
     checkInfLoopFile()
+  }
+
+  test("parsing should fail on Scala code") {
+    val source = new ContentsSource("NoFile", "val i: Int = 0")
+    assert(try {
+      JsParser.parse(source)
+      false
+    } catch {
+      case _: ParsingFailedError => true
+    })
   }
 }

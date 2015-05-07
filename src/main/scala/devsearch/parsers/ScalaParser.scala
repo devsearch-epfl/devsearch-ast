@@ -56,7 +56,7 @@ abstract class ScalaParserLike extends Parser {
     import global._
     import compat.{gen, build}
     import build.implodePatDefs
-    import scala.collection.mutable.ListBuffer
+    import scala.collection.mutable.{ListBuffer, Set => MutableSet}
 
     class Comment(val value: String)
 
@@ -111,9 +111,7 @@ abstract class ScalaParserLike extends Parser {
           tree
 
         } catch {
-          case mi: MalformedInput =>
-            if (posMap.isEmpty) c.abort(NoPosition, "Unparsable stuff: " + mi.msg)
-            else c.abort(correspondingPosition(mi.offset), mi.msg)
+          case mi: MalformedInput => c.abort(NoPosition, mi.msg)
         }
       }
 
@@ -213,6 +211,7 @@ abstract class ScalaParserLike extends Parser {
         def withPatches(patches: List[BracePatch]) = new RobustParser(source0, patches)
 
         val syntaxErrors = new ListBuffer[(Int, String)]
+        val incompleteErrors = MutableSet.empty[String]
 
         override def syntaxError(offset: Offset, msg: String) {
           if (smartParsing) syntaxErrors += ((offset, msg))
@@ -220,9 +219,11 @@ abstract class ScalaParserLike extends Parser {
         }
 
         override def incompleteInputError(msg: String) {
-          val offset = source.content.length - 1
-          if (smartParsing) syntaxErrors += ((offset, msg))
-          else super.incompleteInputError(msg)
+          val braceMsg = List("{","}","(",")","[","]").exists(b => msg.startsWith("'" + b + "'"))
+          if (smartParsing && (braceMsg || !incompleteErrors(msg))) {
+            syntaxErrors += ((source.content.length - 1, msg))
+            incompleteErrors += msg
+          } else super.incompleteInputError(msg)
         }
 
         /** parse unit. If there are inbalanced braces, try to correct them and reparse. */
@@ -233,7 +234,8 @@ abstract class ScalaParserLike extends Parser {
             case Nil      =>
               val (offset, msg) = syntaxErrors.head
               throw new MalformedInput(offset, msg)
-            case patches  => (this withPatches patches).parse()
+            case patches  =>
+              (this withPatches patches).parse()
           }
         }
       }
