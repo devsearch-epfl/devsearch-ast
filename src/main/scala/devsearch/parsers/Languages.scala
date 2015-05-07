@@ -7,6 +7,7 @@ object Languages {
   val Java = "Java"
   val JavaScript = "JavaScript"
   val Scala = "Scala"
+  val QueryLang = "QueryLang"
 
   case class LangSpec(extension: String, parser: Parser)
 
@@ -14,7 +15,8 @@ object Languages {
     (Go, LangSpec("go", GoParser)),
     (JavaScript, LangSpec("js", JsParser)),
     (Java, LangSpec("java", JavaParser)),
-    (Scala, LangSpec("scala", QueryParser))
+    (Scala, LangSpec("scala", ScalaParser)),
+    (QueryLang, LangSpec("query", QueryParser))
   )
 
   val langMap = orderedLangList.toMap
