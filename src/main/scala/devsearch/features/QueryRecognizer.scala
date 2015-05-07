@@ -5,7 +5,7 @@ import devsearch.parsers.Languages
 
 object QueryRecognizer {
   def apply(query: String): Option[CodeFile] = {
-    Languages.orderedSupportedLanguages().map {
+    Languages.orderedSupportedLanguages().view.map {
       generateCodeFile(_, query)
     }.collectFirst {
       case codeFile if codeFile.ast != Empty[AST] => codeFile
