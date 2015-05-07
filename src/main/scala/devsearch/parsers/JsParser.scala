@@ -18,21 +18,32 @@ object JsParser extends Parser {
 
     var parsingRegex: Boolean = false
     var partialComment: Option[String] = None
+    var lineFeed: Boolean = false
+
     override protected def handleWhiteSpace(source: java.lang.CharSequence, offset: Int): Int = {
+      val whiteSpace = """[ \t]+""".r
+      val lineSpace  = """[\n\x0B\f\r]+""".r
+      val anySpace   = """[ \t\n\x0B\f\r]+""".r
 
       def parseComments(offset: Int): Int = {
-        val spaceOffset = whiteSpace findPrefixMatchOf (source.subSequence(offset, source.length)) match {
-          case Some(matched) => offset + matched.end
-          case None => offset
-        }
+        val subSeq = source.subSequence(offset, source.length)
 
-        val commentOffset = comment findPrefixMatchOf (source.subSequence(spaceOffset, source.length)) match {
+        val whiteOffset = (whiteSpace findPrefixMatchOf subSeq).map(_.end) getOrElse 0
+        val anyOffset = (anySpace findPrefixMatchOf subSeq).map(_.end) getOrElse 0
+
+        val spaceOffset = offset + (whiteOffset max anyOffset)
+        val spaceLF = whiteOffset != anyOffset
+
+        val (commentLF, commentOffset) = comment findPrefixMatchOf (source.subSequence(spaceOffset, source.length)) match {
           case Some(matched) =>
+            val commentLF = (lineSpace findFirstIn source.subSequence(spaceOffset, spaceOffset + matched.end)).isDefined
             partialComment = partialComment.map(_ + "\n" + matched.toString) orElse Some(matched.toString)
-            spaceOffset + matched.end
-          case None => spaceOffset
+            (commentLF, spaceOffset + matched.end)
+          case None =>
+            (false, spaceOffset)
         }
 
+        lineFeed = lineFeed || spaceLF || commentLF
         if (commentOffset == offset) offset else parseComments(commentOffset)
       }
 
@@ -77,6 +88,29 @@ object JsParser extends Parser {
       }
     }
 
+    lazy val ASI = new PackratParser[String] {
+      def apply(in: Input) = {
+        val offset = in.offset
+        val source = in.source
+        val start = handleWhiteSpace(source, offset)
+
+        val (semi, semiOffset) = if (start < source.length && source.charAt(start) == ';') {
+          (true, start + 1)
+        } else if (start < source.length && source.charAt(start) == '}') {
+          (true, start)
+        } else {
+          (false, start)
+        }
+
+        if (lineFeed || semi || semiOffset == source.length) {
+          lineFeed = false
+          Success(";", in.drop(semiOffset - offset))
+        } else {
+          Failure("semi or line-feed expected but " + source.charAt(in.offset) + " found", in)
+        }
+      }
+    }
+
     lazy val BitwiseANDExpressionNoIn = withPos(EqualityExpressionNoIn * withPos(BitwiseANDOperator ^^ makeBinaryOp))
 
     lazy val Elision = rep1(",") ^^ { _ map (a => devsearch.ast.NullLiteral) }
@@ -112,7 +146,7 @@ object JsParser extends Parser {
 
     lazy val PostfixOperator = "++" | "--"
 
-    lazy val ExpressionStatement = Expression <~ opt(";")
+    lazy val ExpressionStatement = Expression <~ ASI
 
     lazy val CaseClauses = rep1(CaseClause)
 
@@ -155,7 +189,7 @@ object JsParser extends Parser {
 
     lazy val EmptyStatement = ";" ^^^ { NoStmt }
 
-    lazy val ReturnStatement = withPos("return" ~> opt(Expression) <~ opt(";") ^^ { e => Return(e getOrElse NoExpr) })
+    lazy val ReturnStatement = withPos("return" ~> opt(Expression) <~ ASI ^^ { e => Return(e getOrElse NoExpr) })
 
     lazy val PostfixExpression = withPos(LeftHandSideExpression ~ PostfixOperator ^^ { case e ~ op => UnaryOp(e, op, true) } | LeftHandSideExpression)
 
@@ -177,7 +211,7 @@ object JsParser extends Parser {
       (LogicalORExpressionNoIn <~ "?") ~ (AssignmentExpression <~ ":") ~ AssignmentExpressionNoIn ^^ { case c ~ i ~ e => TernaryOp(c, i, e) }
     | LogicalORExpressionNoIn)
 
-    lazy val BreakStatement = withPos("break" ~> opt(Identifier) <~ opt(";") ^^ { Break(_) })
+    lazy val BreakStatement = withPos("break" ~> opt(Identifier) <~ ASI ^^ { Break(_) })
 
     lazy val VariableDeclarationListNoIn = rep1sep(VariableDeclarationNoIn, ",")
 
@@ -201,7 +235,7 @@ object JsParser extends Parser {
 
     lazy val LogicalORExpressionNoIn = withPos(LogicalANDExpressionNoIn * withPos(LogicalOROperator ^^ makeBinaryOp))
 
-    lazy val ImportStatement = withPos("import" ~> Name ~ (opt("." ~> "*") <~ ";") ^^ { case names ~ wild => Import(names.mkString("."), wild.isDefined, false) })
+    lazy val ImportStatement = withPos("import" ~> Name ~ (opt("." ~> "*") <~ ASI) ^^ { case names ~ wild => Import(names.mkString("."), wild.isDefined, false) })
 
     lazy val Identifier = new PackratParser[String] {
       val ident = """([A-Za-z\$_\xA0-\uFFFF]|\\(x|u)[0-9a-fA-F]{2,4})([A-Za-z0-9\$_\xA0-\uFFFF]|\\(x|u)[0-9a-fA-F]{2,4})*""".r
@@ -227,19 +261,19 @@ object JsParser extends Parser {
 
     lazy val Field = """([A-Za-z\$_\xA0-\uFFFF]|\\(x|u)[0-9a-fA-F]{2,4})([A-Za-z0-9\$_\xA0-\uFFFF]|\\(x|u)[0-9a-fA-F]{2,4})*""".r
 
-    lazy val StmtsBlock: PackratParser[Block] = withPos("{" ~> opt(Stmts) <~ "}" ^^ { stmts => Block(stmts.toList.flatten) });
+    lazy val StmtsBlock: PackratParser[Block] = withPos("{" ~> opt(Stmts) <~ "}" ^^ { stmts => Block(stmts.toList.flatten) })
 
     lazy val MemberExpression = withPos(
       (FunctionExpression | PrimaryExpression) ~ rep(MemberExpressionPart) ^^ { case start ~ mods => mods.foldLeft(start)(combineMember) } |
       AllocationExpression)
 
-    lazy val ThrowStatement = withPos("throw" ~> Expression <~ opt(";") ^^ { Throw(_) })
+    lazy val ThrowStatement = withPos("throw" ~> Expression <~ ASI ^^ { Throw(_) })
 
     lazy val RelationalExpression = withPos(ShiftExpression * withPos(RelationalOperator ^^ makeBinaryOp))
 
     lazy val InitialiserNoIn = withPos("=" ~> AssignmentExpressionNoIn)
 
-    lazy val VariableStatement = withPos("var" ~> VariableDeclarationList <~ opt(";") ^^ { stmtBlock(_) })
+    lazy val VariableStatement = withPos("var" ~> VariableDeclarationList <~ ASI ^^ { stmtBlock(_) })
 
     lazy val BitwiseXOROperator = "^"
 
@@ -253,8 +287,8 @@ object JsParser extends Parser {
 
     lazy val Literal: PackratParser[Expr] = withPos(
       RegularExpressionLiteral |
-      DecimalLiteral           |
       HexIntegerLiteral        |
+      DecimalLiteral           |
       StringLiteral            |
       BooleanLiteral           |
       NullLiteral)
@@ -273,7 +307,7 @@ object JsParser extends Parser {
 
     lazy val VariableDeclaration = withPos(Identifier ~ opt(Initialiser) ^^ { case id ~ i => ValDef(NoModifiers, id, Nil, NoType, i getOrElse Empty[Expr]) })
 
-    lazy val ContinueStatement = withPos("continue" ~> opt(Identifier) <~ opt(";") ^^ { Continue(_) })
+    lazy val ContinueStatement = withPos("continue" ~> opt(Identifier) <~ ASI ^^ { Continue(_) })
 
     lazy val SwitchStatement = withPos(("switch" ~> "(" ~> Expression <~ ")") ~ CaseBlock ^^ { case e ~ cb => Switch(e, cb) })
 
@@ -493,7 +527,7 @@ object JsParser extends Parser {
     })
 
     lazy val IterationStatement: PackratParser[Statement] = withPos(
-      ("do" ~> Stmt) ~ (("while" ~> "(") ~> Expression <~ (")" <~ opt(";"))) ^^ { case s ~ e => Do(e ,s) } |
+      ("do" ~> Stmt) ~ (("while" ~> "(") ~> Expression <~ (")" <~ ASI)) ^^ { case s ~ e => Do(e ,s) } |
       "while" ~> "(" ~> Expression ~ (")" ~> Stmt) ^^ { case e ~ s => While(e, s) } |
       (("for" ~> "(" ~> opt(ExpressionNoIn)) ~ (";" ~> opt(Expression) <~ ";") ~ (opt(Expression) <~ ")") ~ Stmt) ^^ {
         case e1 ~ e2 ~ e3 ~ s => For(Nil, e1.toList, e2 getOrElse NoExpr, e3.toList, s)

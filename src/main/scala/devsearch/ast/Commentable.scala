@@ -24,11 +24,21 @@ trait Commentable {
     })
   }
 
+  def appendComment(opt: Option[String]): this.type = {
+    opt.foreach(appendComment)
+    this
+  }
+
   def prependComment(comment: String): this.type = {
     setComment(_comment match {
       case Some(c) => comment +"\n\n" + c
       case None => comment
     })
+  }
+
+  def prependComment(opt: Option[String]): this.type = {
+    opt.foreach(prependComment)
+    this
   }
 }
 

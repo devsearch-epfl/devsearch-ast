@@ -4,6 +4,7 @@ import devsearch.utils.CodeProvider
 import org.scalatest._
 import devsearch.ast._
 import devsearch.ast.Empty._
+import devsearch.ast.Modifiers._
 
 class ScalaParserTest extends FunSuite with ParserTest {
 
@@ -17,7 +18,7 @@ class ScalaParserTest extends FunSuite with ParserTest {
   def checkNeg[T](input: String) = testCode {
     val source = new ContentsSource("NoFile", input)
     try {
-      val result = QueryParser.parse(source)
+      val result = ScalaParser.parse(source)
       if (result != NoDef) throw new RuntimeException("failed!")
     } catch {
       case pf: ParsingFailedError =>
@@ -26,7 +27,7 @@ class ScalaParserTest extends FunSuite with ParserTest {
 
   def check[T](input: String, tag: String = "") = testCode {
     val source = new ContentsSource("NoFile", input)
-    val ast = QueryParser.parse(source)
+    val ast = ScalaParser.parse(source)
     checkPositions(ast)
   }
 
@@ -1007,10 +1008,99 @@ class ScalaParserTest extends FunSuite with ParserTest {
    */
   def checkInfLoopFile(): Unit = {
     val uiFilePath = CodeProvider.absResourcePath("/samples/UI.scala")
-    assert(QueryParser.parse(uiFilePath) != NoDef)
+    assert(ScalaParser.parse(uiFilePath) != NoDef)
   }
 
   test("parser should not loop infinitely") {
     checkInfLoopFile()
+  }
+
+  test("parser should parse varArgs") {
+    val source = new ContentsSource("NoFile", """
+      def test(a: String*)
+      """)
+
+    assert(ScalaParser.parse(source) == FunctionDef(FINAL | ABSTRACT,"test",List(),List(),
+      List(ValDef(FINAL,"a",List(),PrimitiveTypes.String,NoExpr,true)),
+      PrimitiveTypes.Void, NoStmt))
+  }
+
+  test("parser should parse primitive types") {
+    val source = new ContentsSource("NoFile", """
+      val a = 1
+      val b: Int = 2
+      def toto(f: Int => Int) = f(2)
+      """)
+
+    assert(ScalaParser.parse(source) == Block(List(
+      ValDef(FINAL,"a",List(),NoType,SimpleLiteral(PrimitiveTypes.Int,"1"),false),
+      ValDef(FINAL,"b",List(),PrimitiveTypes.Int,SimpleLiteral(PrimitiveTypes.Int,"2"),false),
+      FunctionDef(FINAL,"toto",List(),List(),List(
+        ValDef(FINAL,"f",List(),FunctionType(List(PrimitiveTypes.Int), PrimitiveTypes.Int), NoExpr,false)
+        ),NoType,Block(List(
+          FunctionCall(Ident("f"),List(),List(SimpleLiteral(PrimitiveTypes.Int,"2")))))),
+    VoidLiteral)))
+  }
+
+  test("parser should parse null literal") {
+    val source = new ContentsSource("NoFile", "val a = null")
+
+    assert(ScalaParser.parse(source) == ValDef(FINAL,"a",List(),NoType,NullLiteral,false))
+  }
+
+  test("parser should parse loops") {
+    val source = new ContentsSource("NoFile", """
+      while (a < 0) {
+        a += 1
+        println(a)
+      }
+      """)
+
+    assert(ScalaParser.parse(source) == While(
+      BinaryOp(Ident("a"),"<",SimpleLiteral(PrimitiveTypes.Int,"0")),
+      Block(List(
+        Assign(Ident("a"),SimpleLiteral(PrimitiveTypes.Int,"1"), Some("+")),
+        FunctionCall(Ident("println"),List(),List(Ident("a")))))))
+  }
+
+  test("parser should parse expression loops") {
+    val source = new ContentsSource("NoFile", """
+      val a = while(b < 0) {
+        b += 1
+      }
+      """)
+
+    assert(ScalaParser.parse(source) == ValDef(FINAL,"a",List(),NoType,Block(List(
+      While(BinaryOp(Ident("b"),"<",SimpleLiteral(PrimitiveTypes.Int,"0")),
+        Block(List(Assign(Ident("b"),SimpleLiteral(PrimitiveTypes.Int,"1"),Some("+"))))),
+      VoidLiteral)),false))
+  }
+
+  test("parser should parse do-while statements") {
+    val source = new ContentsSource("NoFile", """
+      do {
+        println(a.next)
+      } while (a.hasNext)
+      """)
+
+    assert(ScalaParser.parse(source) == Do(FieldAccess(Ident("a"),"hasNext",List()),
+      Block(List(FunctionCall(Ident("println"),List(),List(FieldAccess(Ident("a"),"next",List())))))))
+  }
+
+  test("parser should work for named arguments") {
+    val source = new ContentsSource("NoFile", "test(a = 1, b = 2)")
+
+    assert(ScalaParser.parse(source) == FunctionCall(Ident("test"),List(),List(
+      Assign(Ident("a"),SimpleLiteral(PrimitiveTypes.Int,"1"),None),
+      Assign(Ident("b"),SimpleLiteral(PrimitiveTypes.Int,"2"),None))))
+  }
+
+  test("parser should work for annotations") {
+    val source = new ContentsSource("NoFile", "@annot(a = 1, b = 2) val a = 1")
+
+    assert(ScalaParser.parse(source) == ValDef(FINAL,"a",List(Annotation("annot",Map(
+      "a" -> SimpleLiteral(PrimitiveTypes.Int,"1"),
+      "b" -> SimpleLiteral(PrimitiveTypes.Int,"2")
+    ))),NoType,SimpleLiteral(PrimitiveTypes.Int,"1"),false))
   }
 }

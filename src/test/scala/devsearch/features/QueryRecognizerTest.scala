@@ -69,6 +69,13 @@ class QueryRecognizerTest extends FlatSpec {
     })
   }
 
+  it should "recognize simple Go code" in {
+    assert(QueryRecognizer("t := true") match {
+      case Some(codeFile) => codeFile.language == Languages.Go
+      case None => false
+    })
+  }
+
   it should "recognize Scala files" in {
     val scalaSource = """def map(f: Node => Node)(implicit ops: GraphOps {
                         |  type Node = self.Node
@@ -81,6 +88,13 @@ class QueryRecognizerTest extends FlatSpec {
                         |}""".stripMargin
 
     assert(QueryRecognizer(scalaSource) match {
+      case Some(codeFile) => codeFile.language == Languages.Scala
+      case None => false
+    })
+  }
+
+  it should "recognize simple Scala" in {
+    assert(QueryRecognizer("val a = 2") match {
       case Some(codeFile) => codeFile.language == Languages.Scala
       case None => false
     })

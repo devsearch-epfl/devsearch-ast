@@ -9,6 +9,11 @@ import Modifiers._
 
 object GoParser extends DevMineParser("parser-go") {
   def language = Languages.Go
+
+  def wrappers = List(
+    (s: String) => "package " + Names.DEFAULT + "\n\n" + s,
+    (s: String) => "package " + Names.DEFAULT + "\n\n" + "func " + Names.DEFAULT + "() {\n" + s + "\n}"
+  )
 }
 
 abstract class DevMineParser(parserPath: String) extends Parser {
@@ -40,10 +45,35 @@ abstract class DevMineParser(parserPath: String) extends Parser {
     }
   }
 
+  def wrappers: List[String => String]
+
   def parse(source: Source): AST = {
-    val dirname = source.path.split("/").init.mkString("/")
-    val json = Seq(parser, dirname).!!
-    extractJSON(json.parseJson, SimplePosition(source, 0, 0))
+    val allWrappers = ((s: String) => s) +: wrappers
+    val parseResults = allWrappers.view.map { w =>
+      val path = source match {
+        case cs: ContentsSource => cs.abstractPath
+        case _ => source.path
+      }
+
+      val src = new ContentsSource(path, w(source.contents.mkString))
+      val dirname = src.path.split("/").init.mkString("/")
+
+      var failed = false
+      val buffer = new StringBuffer
+      val exitCode = Seq(parser, dirname) ! ProcessLogger(buffer append _, _ => failed = true)
+
+      if (exitCode == 0 && !failed) {
+        val json = buffer.toString
+        Left(extractJSON(json.parseJson, SimplePosition(src, 0, 0)))
+      } else {
+        Right(exitCode)
+      }
+    }
+
+    parseResults.collectFirst { case Left(ast) => ast }.getOrElse {
+      val code = parseResults.collectFirst { case Right(exitCode) => exitCode }.get
+      throw ParsingFailedError(new RuntimeException("DevMine parser exit code of " + code))
+    }
   }
 
   private implicit class Wrapper(jss: List[JsValue]) {
