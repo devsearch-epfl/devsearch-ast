@@ -63,11 +63,11 @@ object ContentsSource {
   private def fileName(path: String) = tmpDir + "devsearch-input-" + random.nextInt(Integer.MAX_VALUE) + "/" + path
 }
 
-class ContentsSource(_path: String, _contents: String) extends Source {
+class ContentsSource(val abstractPath: String, _contents: String) extends Source {
   lazy val path = {
     var output : java.io.BufferedWriter = null
     try {
-      val fileName = ContentsSource.fileName(_path)
+      val fileName = ContentsSource.fileName(abstractPath)
       val file = new java.io.File(fileName)
       file.getParentFile.mkdirs()
       output = new java.io.BufferedWriter(new java.io.FileWriter(file))
