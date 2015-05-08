@@ -7,6 +7,10 @@ case class TypedVarFeature(position: CodePiecePosition, variableType: String, va
   def key: String = "variableDeclaration=" + variableName + " type=" + variableType
 }
 
+case class VarFeature(position: CodePiecePosition, name: String) extends Feature(position) {
+  def key: String = "variableName=" + name
+}
+
 object ValDefExtractor extends FeatureExtractor {
 
   def convertTypeToString(tpe: Type): String = {
@@ -27,6 +31,7 @@ object ValDefExtractor extends FeatureExtractor {
 
   def extract(data: CodeFile) = data.ast.collect[Feature] {
     case valueDefinition: ValDef if valueDefinition.name != Names.DEFAULT => Set(
+      VarFeature(data.location at valueDefinition.pos, valueDefinition.name),
       TypedVarFeature(data.location at valueDefinition.pos, convertTypeToString(valueDefinition.tpe), valueDefinition.name)
     )
 
