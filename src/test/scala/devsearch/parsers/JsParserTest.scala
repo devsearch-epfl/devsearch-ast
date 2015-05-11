@@ -459,4 +459,20 @@ class JsParserTest extends FunSuite with ParserTest {
       case _: ParsingFailedError => true
     })
   }
+
+  test("parsing should produce correct line numbers") {
+    val source = new ContentsSource("NoFile", """
+      // some comment
+      var a = 1
+
+      // some comment 2
+      var b = 2
+    """)
+
+    assert(JsParser.parse(source).collect {
+      case vd: ValDef if vd.name == "a" => Set("a" -> vd.pos.line)
+      case vd: ValDef if vd.name == "b" => Set("b" -> vd.pos.line)
+      case _ => Set.empty[(String, Int)]
+    } == Set("a" -> 2, "b" -> 5))
+  }
 }

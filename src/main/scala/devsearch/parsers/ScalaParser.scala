@@ -560,8 +560,10 @@ abstract class ScalaParserLike extends Parser {
           val (startLine,startCol) = source.offsetCoords(r.start)
           val (endLine,endCol) = source.offsetCoords(r.end)
           source.position(startLine, startCol, endLine, endCol)
-        case NoPosition => source.position(0)
-        case p => source.position(p.point)
+        case NoPosition =>
+          source.position(0)
+        case p =>
+          source.position(p.point)
       }
 
       def withPos[T <: ast.AST](tree: Tree)(t: ast.Position => T): T = {

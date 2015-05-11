@@ -93,7 +93,7 @@ object JavaParser extends Parser {
     private def extractPosition(node: Node): Position = {
       val (startLine, startCol, endLine, endCol) =
         (node.getBeginLine, node.getBeginColumn, node.getEndLine, node.getEndColumn)
-      source.position(startLine, startCol, endLine, endCol)
+      source.position(startLine - 1, startCol - 1, endLine - 1, endCol - 1)
     }
 
     private def extractComment(node: Node): Option[String] = {

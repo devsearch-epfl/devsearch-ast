@@ -7,9 +7,9 @@ class ValDefExtractorTest extends FlatSpec with CodeProvider {
   "variable declaration extractor" should "extract all variable declarations" in {
     // TODO(julien, mateusz): add a test for each type name
     assert(Set[Feature](
-      TypedVarFeature(location at 376, "Exception", "e"),
-      TypedVarFeature(location at 32,  "Int", "intWithUnderscore"),
-      TypedVarFeature(location at 109, "Array[Array[Int]]", "arr4")
+      TypedVarFeature(location at 375, "Exception", "e"),
+      TypedVarFeature(location at 31,  "Int", "intWithUnderscore"),
+      TypedVarFeature(location at 108, "Array[Array[Int]]", "arr4")
     ).subsetOf(ValDefExtractor.extract(code)))
   }
 
