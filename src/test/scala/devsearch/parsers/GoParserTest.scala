@@ -193,4 +193,20 @@ class GoParserTest extends FlatSpec with ParserTest {
         ))
       ))))))
   }
+
+  it should "be robust for queries" in {
+    val source = new ContentsSource("file.go", """
+      |import "fmt"
+      |
+      |func main() {
+      |    fmt.Println("Hello, 世界")
+      |}""".stripMargin)
+
+    GoParser.parse(source)
+  }
+
+  it should "be robust also with function code" in {
+    val source = new ContentsSource("file.go", "fmt.Println(\"bob\")")
+    GoParser.parse(source)
+  }
 }

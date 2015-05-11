@@ -1,8 +1,6 @@
 package devsearch.features
 
-import devsearch.ast._
-import devsearch.parsers._
-import scala.util.parsing.combinator._
+import devsearch.parsers.Languages
 
 /**
  * Base feature class
@@ -63,9 +61,8 @@ object Feature {
  * just the AST.
  */
 trait FeatureExtractor extends java.io.Serializable {
-
   /** Extract all features of a given type from the given code file */
-  def extract(data: CodeFileData): Set[Feature]
+  def extract(data: CodeFile): Set[Feature]
 }
 
 /**
@@ -75,48 +72,17 @@ trait FeatureExtractor extends java.io.Serializable {
  * from a given code file. This procedure is performed in a framework-agnostic way and it is the
  * job of the caller to parallelize over multiple code files.
  */
-object FeatureRecognizer extends (CodeFileData => TraversableOnce[Feature]) with java.io.Serializable {
-
-  lazy val extractors = List(
+object FeatureRecognizer extends (CodeFile => TraversableOnce[Feature]) with java.io.Serializable {
+  lazy val extractors = Set(
     ClassDefExtractor,
-    ComplexExtractor,
     ImportExtractor,
+    FieldExtractor,
+    SemanticExtractor,
     StructuralExtractor,
     FunDefExtractor,
     TypeExtractor,
     ValDefExtractor
   )
 
-  def apply(data: CodeFileData) = extractors.flatMap(_.extract(data))
+  def apply(data: CodeFile): Set[Feature] = extractors.flatMap(_.extract(data))
 }
-
-case class CodeFileLocation(user: String, repoName: String, fileName: String) extends java.io.Serializable {
-  def at(pos: Position) = CodePiecePosition(this, pos.line)
-  def at(line: Int) = CodePiecePosition(this, line)
-  override def toString = user + "/" + repoName + "/" + fileName
-}
-
-case class CodePiecePosition(location: CodeFileLocation, line: Int) extends java.io.Serializable {
-  override def toString = location.toString + ":" + line
-}
-
-case class CodeFileData(size: Long, language: String, location: CodeFileLocation, ast: AST) extends java.io.Serializable
-
-object CodeFileData {
-  def apply(size: Long, language: String, location: CodeFileLocation, source: String): CodeFileData = {
-    val parser = language match {
-      case Languages.Go => GoParser
-      case Languages.Java => JavaParser
-      case Languages.JavaScript => JsParser
-      case Languages.Scala => QueryParser
-    }
-
-    new CodeFileData(
-      size, language, location,
-      scala.util.Try(
-        parser.parse(new ContentsSource(location.fileName, source))
-      ) getOrElse Empty[AST]
-    )
-  }
-}
-

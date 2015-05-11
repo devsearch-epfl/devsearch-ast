@@ -4,14 +4,22 @@ import devsearch.ast
 import devsearch.ast.{Source, Names, AST}
 
 import scala.tools.nsc.interactive._
-import scala.tools.nsc.ast.parser.{Parsers => ScalaParser}
 import scala.reflect.internal.util.{Position => _, _}
 
 import org.scalamacros.paradise.parser.Tokens._
 import org.scalamacros.paradise.quasiquotes._
 
-object QueryParser extends Parser {
+object ScalaParser extends ScalaParserLike {
+  def acceptHoles = false
+}
 
+object QueryParser extends ScalaParserLike {
+  def acceptHoles = true
+}
+
+abstract class ScalaParserLike extends Parser {
+
+  def acceptHoles: Boolean
   def language = Languages.Scala
 
   private lazy val compiler = {
@@ -48,7 +56,9 @@ object QueryParser extends Parser {
     import global._
     import compat.{gen, build}
     import build.implodePatDefs
-    import scala.collection.mutable.ListBuffer
+    import scala.collection.mutable.{ListBuffer, Set => MutableSet}
+
+    class Comment(val value: String)
 
     object parser extends Parser {
       // We're not going to use the entryPoint as this limits robust parsing
@@ -72,11 +82,36 @@ object QueryParser extends Parser {
 
       def parse(source: SourceFile): Tree = {
         try {
-          new RobustParser(source).smartParse()
+          val (parser, tree) = if (acceptHoles) {
+            val parser = new RobustParser(source)
+            val tree = parser.smartParse()
+            (parser, tree)
+          } else {
+            val parser = new HoleParser(source)
+            val tree = parser.parse()
+            (parser, tree)
+          }
+
+          // assign comments as tree attachments
+          (new Traverser {
+            var comments: Seq[(Int, String)] = {
+              val comments = parser.comments.toSeq.map(p => (p._1._1, p._1._2, p._2))
+              val grouped = comments.groupBy(_._2).mapValues(_.sortBy(_._1).map(_._3).mkString("\n"))
+              grouped.toSeq.sortBy(_._1)
+            }
+
+            override def traverse(tree: Tree): Unit = {
+              while (comments.nonEmpty && tree.pos.start > comments.head._1) {
+                tree.updateAttachment(new Comment(comments.head._2))
+                comments = comments.tail
+              }
+            }
+          }).traverse(tree)
+
+          tree
+
         } catch {
-          case mi: MalformedInput =>
-            if (posMap.isEmpty) c.abort(NoPosition, "Unparsable stuff: " + mi.msg)
-            else c.abort(correspondingPosition(mi.offset), mi.msg)
+          case mi: MalformedInput => c.abort(NoPosition, mi.msg)
         }
       }
 
@@ -91,11 +126,11 @@ object QueryParser extends Parser {
 
         holeMap.update(c.fresh[TermName]("_"), dummyHole)
 
-        override def isHole: Boolean = in.token == USCORE
-        override def isHole(name: Name): Boolean = name.toString == "_"
+        override def isHole: Boolean = acceptHoles && in.token == USCORE
+        override def isHole(name: Name): Boolean = acceptHoles && name.toString == "_"
 
         override def ident(skipIt: Boolean): Name =
-          if (in.name.toString == "_") {
+          if (acceptHoles && in.name.toString == "_") {
             in.nextToken()
             dfltName 
           } else super.ident(skipIt)
@@ -148,6 +183,12 @@ object QueryParser extends Parser {
         }
 
         override def parseStartRule = () => queryCode()
+
+        private var _comments: Map[(Int, Int), String] = Map.empty
+        def comments: Map[(Int, Int), String] = _comments
+        def comment(value: String, start: Int, end: Int): Unit = {
+          _comments += (start, end) -> value
+        }
       }
 
       import scala.tools.nsc.ast.parser._
@@ -157,7 +198,7 @@ object QueryParser extends Parser {
       class RobustParser(source0: SourceFile, patches: List[BracePatch]) extends HoleParser(source0) {
         def this(source0: SourceFile) = this(source0, Nil)
 
-        override def newScanner() = new RobustScanner(source0, patches)
+        override def newScanner() = new RobustScanner(this, patches)
 
         private var smartParsing = false
         @inline private def withSmartParsing[T](body: => T): T = {
@@ -170,6 +211,7 @@ object QueryParser extends Parser {
         def withPatches(patches: List[BracePatch]) = new RobustParser(source0, patches)
 
         val syntaxErrors = new ListBuffer[(Int, String)]
+        val incompleteErrors = MutableSet.empty[String]
 
         override def syntaxError(offset: Offset, msg: String) {
           if (smartParsing) syntaxErrors += ((offset, msg))
@@ -177,9 +219,11 @@ object QueryParser extends Parser {
         }
 
         override def incompleteInputError(msg: String) {
-          val offset = source.content.length - 1
-          if (smartParsing) syntaxErrors += ((offset, msg))
-          else super.incompleteInputError(msg)
+          val braceMsg = List("{","}","(",")","[","]").exists(b => msg.startsWith("'" + b + "'"))
+          if (smartParsing && (braceMsg || !incompleteErrors(msg))) {
+            syntaxErrors += ((source.content.length - 1, msg))
+            incompleteErrors += msg
+          } else super.incompleteInputError(msg)
         }
 
         /** parse unit. If there are inbalanced braces, try to correct them and reparse. */
@@ -190,18 +234,19 @@ object QueryParser extends Parser {
             case Nil      =>
               val (offset, msg) = syntaxErrors.head
               throw new MalformedInput(offset, msg)
-            case patches  => (this withPatches patches).parse()
+            case patches  =>
+              (this withPatches patches).parse()
           }
         }
       }
 
       /** Based on scalac's UnitScanner */
-      class RobustScanner(source0: SourceFile, patches: List[BracePatch]) extends SourceFileScanner(source0) {
-        def this(source0: SourceFile) = this(source0, Nil)
+      class RobustScanner(parser: HoleParser, patches: List[BracePatch]) extends SourceFileScanner(parser.source) {
+        def this(parser: HoleParser) = this(parser, Nil)
 
         private var bracePatches: List[BracePatch] = patches
 
-        lazy val parensAnalyzer = new ParensAnalyzer(source0, Nil)
+        lazy val parensAnalyzer = new ParensAnalyzer(parser, Nil)
 
         override def parenBalance(token: Token) = parensAnalyzer.balance(token)
 
@@ -210,11 +255,11 @@ object QueryParser extends Parser {
           if (!parensAnalyzer.tabSeen) {
             var bal = parensAnalyzer.balance(RBRACE)
             while (bal < 0) {
-              patches = new ParensAnalyzer(source0, patches).insertRBrace()
+              patches = new ParensAnalyzer(parser, patches).insertRBrace()
               bal += 1
             }
             while (bal > 0) {
-              patches = new ParensAnalyzer(source0, patches).deleteRBrace()
+              patches = new ParensAnalyzer(parser, patches).deleteRBrace()
               bal -= 1
             }
           }
@@ -242,10 +287,57 @@ object QueryParser extends Parser {
             }
           }
         }
+
+        override def skipComment(): Boolean = {
+          val SU = '\u001A'
+          if (ch == '/' || ch == '*') {
+            val comment = new StringBuilder("/")
+            def appendToComment() = comment.append(ch)
+
+            if (ch == '/') {
+              do {
+                appendToComment()
+                nextChar()
+              } while ((ch != CR) && (ch != LF) && (ch != SU))
+            } else {
+              var openComments = 1
+              appendToComment()
+              nextChar()
+              appendToComment()
+              while (openComments > 0) {
+                do {
+                  do {
+                    if (ch == '/') {
+                      nextChar(); appendToComment()
+                      if (ch == '*') {
+                        nextChar(); appendToComment()
+                        openComments += 1
+                      }
+                    }
+                    if (ch != '*' && ch != SU) {
+                      nextChar(); appendToComment()
+                    }
+                  } while (ch != '*' && ch != SU)
+                  while (ch == '*') {
+                    nextChar(); appendToComment()
+                  }
+                } while (ch != '/' && ch != SU)
+                if (ch == '/') nextChar()
+                else incompleteInputError("unclosed comment")
+                openComments -= 1
+              }
+            }
+
+            parser.comment(comment.toString, offset, charOffset - 2)
+            true
+          } else {
+            false
+          }
+        }
       }
 
       /** Based on scalac's ParensAnalyzer */
-      class ParensAnalyzer(source0: SourceFile, patches: List[BracePatch]) extends RobustScanner(source0, patches) {
+      class ParensAnalyzer(parser: HoleParser, patches: List[BracePatch]) extends RobustScanner(parser, patches) {
         val balance = scala.collection.mutable.Map(RPAREN -> 0, RBRACKET -> 0, RBRACE -> 0)
 
         init()
@@ -463,13 +555,29 @@ object QueryParser extends Parser {
       val sourceFile = new scala.reflect.internal.util.BatchSourceFile(NoFile, source.contents)
       val tree = parser.parse(sourceFile)
 
-      def extractPosition(pos: Position): ast.Position = pos match {
+      def p2p(pos: Position): ast.Position = pos match {
         case r: RangePosition =>
           val (startLine,startCol) = source.offsetCoords(r.start)
           val (endLine,endCol) = source.offsetCoords(r.end)
           source.position(startLine, startCol, endLine, endCol)
         case NoPosition => source.position(0)
-        case _ => source.position(pos.point)
+        case p => source.position(p.point)
+      }
+
+      def withPos[T <: ast.AST](tree: Tree)(t: ast.Position => T): T = {
+        val pos = p2p(tree.pos)
+        val res = t(pos).setPos(pos)
+        val comment = tree.attachments.get[Comment].map(_.value)
+        comment.foreach(res.appendComment)
+        res
+      }
+
+      def withPoss[T <: ast.AST](tree: Tree)(t: ast.Position => List[T]): List[T] = {
+        val pos = p2p(tree.pos)
+        val res = t(pos).map(_.setPos(pos))
+        val comment = tree.attachments.get[Comment].map(_.value)
+        if (res.nonEmpty && comment.isDefined) res.head.appendComment(comment.get)
+        res
       }
 
       def extractName(tree: Tree): String = tree match {
@@ -510,9 +618,8 @@ object QueryParser extends Parser {
         (modifiers, annots)
       }
 
-      def extractTypeDef(td: TypeDef): ast.TypeDef = {
+      def extractTypeDef(td: TypeDef): ast.TypeDef = withPos(td) { pos =>
         val name = td.name.decode
-        val pos = extractPosition(td.pos)
         val tparams = td.tparams.map(extractTypeDef)
         val (modifiers, annotations) = extractModifiers(td.mods, pos)
         td.rhs match {
@@ -524,7 +631,7 @@ object QueryParser extends Parser {
         }
       }
 
-      def extractTemplate(template: Template): (List[ast.Type], List[ast.Definition], List[ast.Statement]) = {
+      def extractTemplate(template: Template): (Option[String], List[ast.Type], List[ast.Definition], List[ast.Statement]) = {
         val parents = template.parents.map(extractType)
         val selfTpes = if (template.self.name == nme.WILDCARD && template.self.tpt.isInstanceOf[TypeTree]) Nil else {
           val vd = extractDef(template.self).asInstanceOf[ast.ValDef]
@@ -532,218 +639,199 @@ object QueryParser extends Parser {
         }
         val body = template.body.flatMap(extractStmts)
         val (definitions, statements) = body.partition(_.isInstanceOf[ast.Definition])
-        (parents, selfTpes ++ definitions.map(_.asInstanceOf[ast.Definition]), statements)
+        (template.attachments.get[Comment].map(_.value), parents, selfTpes ++ definitions.map(_.asInstanceOf[ast.Definition]), statements)
       }
 
-      def wrapStatements(asts: List[ast.Statement], pos: ast.Position): ast.Block = asts match {
+      def wrapStatements(tree: Tree, asts: List[ast.Statement]): ast.Block = asts match {
         case Nil => ast.Empty.NoStmt
         case (b: ast.Block) :: Nil => b
         case stmts =>
-          val block = ast.Block(stmts)
-          if (stmts.head.pos != ast.NoPosition) block.setPos(stmts.head.pos) else block.setPos(pos)
+          val p = if (stmts.head.pos != ast.NoPosition) stmts.head.pos else p2p(tree.pos)
+          ast.Block(stmts).setPos(p)
       }
 
-      def extractType(tpt: Tree): ast.Type = {
-        val pos = extractPosition(tpt.pos)
+      def extractType(tpt: Tree): ast.Type = withPos(tpt)(pos => tpt match {
+        case TypeTree() => ast.Empty.NoType
 
-        val extracted = tpt match {
-          case TypeTree() => ast.Empty.NoType
+        case Ident(name) =>
+          if (name.decode == Names.DEFAULT) ast.Empty.NoType
+          else ast.ClassType(ast.Empty.NoExpr, name.decode, Nil, Nil)
 
-          case Ident(name) =>
-            if (name.decode == Names.DEFAULT) ast.Empty.NoType
-            else ast.ClassType(ast.Empty.NoExpr, name.decode, Nil, Nil)
+        case Select(scope, name) =>
+          ast.ClassType(extractExpr(scope), name.decode, Nil, Nil)
 
-          case Select(scope, name) =>
-            ast.ClassType(extractExpr(scope), name.decode, Nil, Nil)
-
-          case AppliedTypeTree(tpt, args) => extractType(tpt) match {
-            case ct @ ast.ClassType(scope, name, annotations, params) =>
-              ast.ClassType(scope, name, annotations, params ++ args.map(extractType)).fromAST(ct)
-            case tpe => tpe.appendComment(args.map(_.toString).mkString("[",",","]"))
-          }
-
-          case CompoundTypeTree(templ) =>
-            val (parents, defs, init) = extractTemplate(templ)
-            ast.ComplexType(parents, defs, ast.Empty.NoExpr)
-
-          case SingletonTypeTree(tpe) =>
-            ast.ComplexType(Nil, Nil, extractExpr(tpe))
-
-          case ExistentialTypeTree(tpt, clauses) =>
-            ast.ComplexType(extractType(tpt) :: Nil, clauses.map(extractDef), ast.Empty.NoExpr)
-
-          case SelectFromTypeTree(qualifier, name) =>
-            val pos = extractPosition(tree.pos)
-            ast.ComplexType(extractType(qualifier) :: Nil, Nil, ast.Ident(name.decode).setPos(pos))
-
-          case Annotated(annot, arg) =>
-            extractType(arg).appendComment(annot.toString)
-
-          case o => throw ParsingFailedError(new RuntimeException(s"Unknown type tree [${o.getClass}]: $o"))
+        case AppliedTypeTree(tpt, args) => extractType(tpt) match {
+          case ct @ ast.ClassType(scope, name, annotations, params) =>
+            ast.ClassType(scope, name, annotations, params ++ args.map(extractType)).fromAST(ct)
+          case tpe => tpe.appendComment(args.map(_.toString).mkString("[",",","]"))
         }
 
-        extracted.setPos(pos)
-      }
+        case CompoundTypeTree(templ) =>
+          val (comment, parents, defs, init) = extractTemplate(templ)
+          ast.ComplexType(parents, defs, ast.Empty.NoExpr).appendComment(comment)
 
-      def extractDef(tree: Tree): ast.Definition = {
-        val pos = extractPosition(tree.pos)
+        case SingletonTypeTree(tpe) =>
+          ast.ComplexType(Nil, Nil, extractExpr(tpe))
 
-        val extracted: ast.Definition = tree match {
-          case PackageDef(pid, stats) =>
-            val (imports, defs) = stats.flatMap(extractStmts).partition(_.isInstanceOf[ast.Import])
-            ast.PackageDef(extractName(pid), Nil, imports.map(_.asInstanceOf[ast.Import]), defs.map(_.asInstanceOf[ast.Definition]))
+        case ExistentialTypeTree(tpt, clauses) =>
+          ast.ComplexType(extractType(tpt) :: Nil, clauses.map(extractDef), ast.Empty.NoExpr)
 
-          case ClassDef(mods, name, tparams, impl) =>
-            val sort = if (mods.hasFlag(Flag.TRAIT) || mods.hasFlag(Flag.INTERFACE)) ast.TraitSort else ast.ClassSort
-            val (modifiers, annotations) = extractModifiers(mods, pos)
-            val (parentTypes, definitions, body) = extractTemplate(impl)
-            val parents = parentTypes.collect { case tpe : ast.ClassType => tpe }
-            val init = if (body.isEmpty) Nil else List(ast.Initializer(false, Nil, ast.Block(body).setPos(pos)).setPos(pos))
-            ast.ClassDef(modifiers, name.decode, annotations, tparams.map(extractTypeDef), parents, init ++ definitions, sort)
+        case SelectFromTypeTree(qualifier, name) =>
+          ast.ComplexType(extractType(qualifier) :: Nil, Nil, ast.Ident(name.decode).setPos(pos))
 
-          case ModuleDef(mods, name, impl) =>
-            val (modifiers, annotations) = extractModifiers(mods, pos)
-            val (parentTypes, definitions, body) = extractTemplate(impl)
-            val parents = parentTypes.collect { case tpe : ast.ClassType => tpe }
+        case Annotated(annot, arg) =>
+          extractType(arg).appendComment(annot.toString)
 
-            val init = if (body.isEmpty) Nil else List(ast.Initializer(true, Nil, ast.Block(body).setPos(pos)).setPos(pos))
-            val staticDefs = init ++ definitions.map {
-              case cd: ast.ClassDef => cd.copy(modifiers = cd.modifiers | ast.Modifiers.STATIC).fromAST(cd)
-              case fd: ast.FunctionDef => fd.copy(modifiers = fd.modifiers | ast.Modifiers.STATIC).fromAST(fd)
-              case vd: ast.ValDef => vd.copy(modifiers = vd.modifiers | ast.Modifiers.STATIC).fromAST(vd)
-              case d => d
-            }
-            ast.ClassDef(modifiers | ast.Modifiers.FINAL, name.decode, annotations, Nil, parents, staticDefs)
+        case o => throw ParsingFailedError(new RuntimeException(s"Unknown type tree [${o.getClass}]: $o"))
+      })
 
-          case build.SyntacticPatDef(mods, pat, tpt, rhs) =>
-            val (modifiers, annotations) = extractModifiers(mods, pos)
-            val pattern = extractExpr(pat)
-            val value = extractExpr(rhs)
-            extractType(tpt) match {
-              case ast.Empty.NoType => ast.ExtractionValDef(modifiers, pattern, annotations, value)
-              case tpe => ast.ExtractionValDef(modifiers, ast.InstanceOf(pattern, tpe).setPos(pattern.pos), annotations, value)
-            }
+      def extractDef(tree: Tree): ast.Definition = withPos(tree)(pos => tree match {
+        case PackageDef(pid, stats) =>
+          val (imports, defs) = stats.flatMap(extractStmts).partition(_.isInstanceOf[ast.Import])
+          ast.PackageDef(extractName(pid), Nil, imports.map(_.asInstanceOf[ast.Import]), defs.map(_.asInstanceOf[ast.Definition]))
 
-          case ValDef(mods, name, tpt, rhs) =>
-            val (modifiers, annotations) = extractModifiers(mods, pos)
-            val (tpe, varArgs) = extractType(tpt) match {
-              case ast.ClassType(ast.FieldAccess(ast.Ident("_root_"), "scala", Nil), "<repeated>", Nil, List(tpe)) =>
-                (tpe, true)
-              case tpe =>
-                (tpe, false)
-            }
-            ast.ValDef(modifiers, name.decode, annotations, tpe, extractExpr(rhs), varArgs)
+        case ClassDef(mods, name, tparams, impl) =>
+          val sort = if (mods.hasFlag(Flag.TRAIT) || mods.hasFlag(Flag.INTERFACE)) ast.TraitSort else ast.ClassSort
+          val (modifiers, annotations) = extractModifiers(mods, pos)
+          val (comment, parentTypes, definitions, body) = extractTemplate(impl)
+          val parents = parentTypes.collect { case tpe : ast.ClassType => tpe }
+          val init = if (body.isEmpty) Nil else List(ast.Initializer(false, Nil, ast.Block(body).setPos(pos)).setPos(pos))
+          ast.ClassDef(modifiers, name.decode, annotations, tparams.map(extractTypeDef), parents, init ++ definitions, sort).appendComment(comment)
 
-          case DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
-            val (modifiers, annotations) = extractModifiers(mods, pos)
-            val params = vparamss.flatten.map(vd => extractDef(vd).asInstanceOf[ast.ValDef])
-            val body = wrapStatements(extractStmts(rhs), pos)
+        case ModuleDef(mods, name, impl) =>
+          val (modifiers, annotations) = extractModifiers(mods, pos)
+          val (comment, parentTypes, definitions, body) = extractTemplate(impl)
+          val parents = parentTypes.collect { case tpe : ast.ClassType => tpe }
+
+          val init = if (body.isEmpty) Nil else List(ast.Initializer(true, Nil, ast.Block(body).setPos(pos)).setPos(pos))
+          val staticDefs = init ++ definitions.map {
+            case cd: ast.ClassDef => cd.copy(modifiers = cd.modifiers | ast.Modifiers.STATIC).fromAST(cd)
+            case fd: ast.FunctionDef => fd.copy(modifiers = fd.modifiers | ast.Modifiers.STATIC).fromAST(fd)
+            case vd: ast.ValDef => vd.copy(modifiers = vd.modifiers | ast.Modifiers.STATIC).fromAST(vd)
+            case d => d
+          }
+          ast.ClassDef(modifiers | ast.Modifiers.FINAL, name.decode, annotations, Nil, parents, staticDefs).appendComment(comment)
+
+        case build.SyntacticPatDef(mods, pat, tpt, rhs) =>
+          val (modifiers, annotations) = extractModifiers(mods, pos)
+          val pattern = extractExpr(pat)
+          val value = extractExpr(rhs)
+          extractType(tpt) match {
+            case ast.Empty.NoType => ast.ExtractionValDef(modifiers, pattern, annotations, value)
+            case tpe => ast.ExtractionValDef(modifiers, ast.InstanceOf(pattern, tpe).setPos(pattern.pos), annotations, value)
+          }
+
+        case ValDef(mods, name, tpt, rhs) =>
+          val (modifiers, annotations) = extractModifiers(mods, pos)
+          val (tpe, varArgs) = extractType(tpt) match {
+            case ast.ClassType(ast.FieldAccess(ast.Ident("_root_"), "scala", Nil), "<repeated>", Nil, List(tpe)) =>
+              (tpe, true)
+            case tpe =>
+              (tpe, false)
+          }
+          ast.ValDef(modifiers, name.decode, annotations, tpe, extractExpr(rhs), varArgs)
+
+        case DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
+          val (modifiers, annotations) = extractModifiers(mods, pos)
+          val params = vparamss.flatten.map(vd => extractDef(vd).asInstanceOf[ast.ValDef])
+          val body = wrapStatements(tree, extractStmts(rhs))
+          if (name.decode == "<init>")
+            ast.ConstructorDef(modifiers, annotations, tparams.map(extractTypeDef), params, body)
+          else
             ast.FunctionDef(modifiers, name.decode, annotations, tparams.map(extractTypeDef), params, extractType(tpt), body)
 
-          case td @ TypeDef(mods, name, tparams, rhs) => extractTypeDef(td)
+        case td @ TypeDef(mods, name, tparams, rhs) => extractTypeDef(td)
 
-          case o => throw ParsingFailedError(new RuntimeException(s"Unknown definition tree [${o.getClass}]: $o"))
+        case o => throw ParsingFailedError(new RuntimeException(s"Unknown definition tree [${o.getClass}]: $o"))
+      })
+
+      def extractStmts(tree: Tree): List[ast.Statement] = withPoss(tree)(pos => tree match {
+        case Import(expr, selectors) =>
+          val name = extractName(expr)
+          selectors.map { s =>
+            val (path, asterisk) = if (s.name == nme.WILDCARD) {
+              (name, true)
+            } else {
+              (name + "." + s.name, false)
+            }
+            ast.Import(path, asterisk, true)
+          }
+
+        case build.SyntacticFor(_, _) => List(extractExpr(tree))
+
+        case build.SyntacticForYield(_, _) => List(extractExpr(tree))
+
+        case Apply(fun, args) => List(extractExpr(fun) match {
+          case a @ ast.FieldAccess(s @ ast.Super(qual), nme.CONSTRUCTOR, tparams) =>
+            val call = ast.SuperCall(qual, tparams, args.map(extractExpr)).fromAST(a)
+            s.comment.foreach(call.appendComment)
+            call
+          case a @ ast.FieldAccess(s @ ast.This(qual), nme.CONSTRUCTOR, tparams) =>
+            val call = ast.ThisCall(qual, tparams, args.map(extractExpr)).fromAST(a)
+            s.comment.foreach(call.appendComment)
+            call
+          case caller => extractApply(tree, caller, args.map(extractExpr))
+        })
+
+        case LabelDef(nm1, _, ife @ If(cond, Block(stats, Apply(Ident(nm2), Nil)), _)) if nm1 == nm2 =>
+          List(ast.While(extractExpr(cond), wrapStatements(ife, stats.flatMap(extractStmts))))
+
+        case LabelDef(nm1, _, b @ Block(stats, If(cond, Apply(Ident(nm2), Nil), _))) if nm1 == nm2 =>
+          List(ast.Do(extractExpr(cond), wrapStatements(b, stats.flatMap(extractStmts))))
+
+        case ld : LabelDef => throw ParsingFailedError(new RuntimeException(s"Unexpected label-def: $ld"))
+
+        case t: TermTree => extractExpr(t) match {
+          case ast.Empty.NoExpr => Nil
+          case expr => List(expr)
         }
 
-        extracted.setPos(pos)
-      }
-
-      def extractStmts(tree: Tree): List[ast.Statement] = {
-        val pos = extractPosition(tree.pos)
-
-        val extracted: List[ast.Statement] = tree match {
-          case Import(expr, selectors) =>
-            val name = extractName(expr)
-            selectors.map { s =>
-              val (path, asterisk) = if (s.name == nme.WILDCARD) {
-                (name, true)
-              } else {
-                (name + "." + s.name, false)
-              }
-              ast.Import(path, asterisk, true)
-            }
-
-          case build.SyntacticFor(_, _) => List(extractExpr(tree))
-
-          case build.SyntacticForYield(_, _) => List(extractExpr(tree))
-
-          case Apply(fun, args) => List(extractExpr(fun) match {
-            case a @ ast.FieldAccess(s @ ast.Super(qual), nme.CONSTRUCTOR, tparams) =>
-              val call = ast.SuperCall(qual, tparams, args.map(extractExpr)).fromAST(a)
-              s.comment.foreach(call.appendComment)
-              call
-            case a @ ast.FieldAccess(s @ ast.This(qual), nme.CONSTRUCTOR, tparams) =>
-              val call = ast.ThisCall(qual, tparams, args.map(extractExpr)).fromAST(a)
-              s.comment.foreach(call.appendComment)
-              call
-            case caller => extractApply(caller, args.map(extractExpr))
-          })
-
-          case LabelDef(nm1, _, ife @ If(cond, Block(stats, Apply(Ident(nm2), Nil)), _)) if nm1 == nm2 =>
-            List(ast.While(extractExpr(cond), wrapStatements(stats.flatMap(extractStmts), extractPosition(ife.pos))))
-
-          case LabelDef(nm1, _, b @ Block(stats, If(cond, Apply(Ident(nm2), Nil), _))) if nm1 == nm2 =>
-            List(ast.Do(extractExpr(cond), wrapStatements(stats.flatMap(extractStmts), extractPosition(b.pos))))
-
-          case ld : LabelDef => throw ParsingFailedError(new RuntimeException(s"Unexpected label-def: $ld"))
-
-          case t: TermTree => extractExpr(t) match {
-            case ast.Empty.NoExpr => Nil
-            case expr => List(expr)
-          }
-
-          case r: RefTree => extractExpr(r) match {
-            case ast.Empty.NoExpr => Nil
-            case expr => List(expr)
-          }
-
-          case d: DefTree => extractDef(d) match {
-            case ast.Empty.NoDef => Nil
-            case definition => List(definition)
-          }
-
-          case Annotated(annot, arg) =>
-            extractStmts(arg) match {
-              case x :: xs => x.appendComment(annot.toString) :: xs
-              case _ => Nil
-            }
-
-          case o => throw ParsingFailedError(new RuntimeException(s"Unknown statement tree [${o.getClass}]: $o"))
+        case r: RefTree => extractExpr(r) match {
+          case ast.Empty.NoExpr => Nil
+          case expr => List(expr)
         }
 
-        extracted.map(_.setPos(pos))
-      }
+        case d: DefTree => extractDef(d) match {
+          case ast.Empty.NoDef => Nil
+          case definition => List(definition)
+        }
 
-      def extractApply(fun: ast.Expr, args: List[ast.Expr]): ast.Expr = fun match {
+        case Annotated(annot, arg) =>
+          extractStmts(arg) match {
+            case x :: xs => x.appendComment(annot.toString) :: xs
+            case _ => Nil
+          }
+
+        case o => throw ParsingFailedError(new RuntimeException(s"Unknown statement tree [${o.getClass}]: $o"))
+      })
+
+      def extractApply(tree: Tree, fun: ast.Expr, args: List[ast.Expr]): ast.Expr = withPos(tree)(pos => fun match {
         case a @ ast.FieldAccess(cc : ast.ConstructorCall, "<init>", tparams) =>
           cc.copy(args = cc.args ++ args).fromAST(cc).fromAST(a)
         case a @ ast.FieldAccess(receiver, name, tparams) =>
           ast.FunctionCall(ast.FieldAccess(receiver, name, Nil).fromAST(a), tparams, args)
         case caller => ast.FunctionCall(caller, Nil, args)
-      }
+      })
 
       def extractExpr(tree: Tree): ast.Expr = {
-        val pos = extractPosition(tree.pos)
 
         def extractFors(enums: List[Tree], body: ast.Expr, generator: Boolean): ast.Expr = enums match {
           case Nil => body
           case (a @ Apply(Ident(nme.LARROWkw), (b @ Bind(name, expr)) :: iterable :: Nil)) :: xs =>
             val inner = extractFors(xs, body, generator)
-            val valDef = ast.ValDef(ast.Modifiers.FINAL, name.decode, Nil, ast.Empty.NoType, ast.Empty.NoExpr).setPos(extractPosition(b.pos))
-            val forPos = extractPosition(a.pos)
-            expr match {
+            val valDef = withPos(b)(_ => ast.ValDef(ast.Modifiers.FINAL, name.decode, Nil, ast.Empty.NoType, ast.Empty.NoExpr))
+            withPos(a)(pos => expr match {
               case id @ Ident(nme.WILDCARD) =>
-                ast.Foreach(valDef :: Nil, extractExpr(iterable), inner, generator).setPos(forPos)
+                ast.Foreach(valDef :: Nil, extractExpr(iterable), inner, generator)
               case _ =>
-                val extractor = ast.ExtractionValDef(ast.Modifiers.FINAL, extractExpr(expr), Nil, ast.Empty.NoExpr)
-                  .setPos(extractPosition(expr.pos))
+                val extractor = ast.ExtractionValDef(ast.Modifiers.FINAL, extractExpr(expr), Nil, ast.Empty.NoExpr).setPos(pos)
                 val block = inner match {
                   case ast.Block(stmts) => ast.Block(extractor :: stmts).fromAST(inner)
                   case stmt => ast.Block(extractor :: stmt :: Nil).fromAST(inner)
                 }
-                ast.Foreach(valDef :: Nil, extractExpr(iterable), block, generator).setPos(forPos)
-            }
-          case (a @ Assign(e1, e2)) :: xs =>
+                ast.Foreach(valDef :: Nil, extractExpr(iterable), block, generator)
+            })
+          case (a @ Assign(e1, e2)) :: xs => withPos(a) { _ =>
             val inner = extractFors(xs, body, generator)
             val rhs = extractExpr(e2)
             ast.Block(List(extractExpr(e1) match {
@@ -751,12 +839,13 @@ object QueryParser extends Parser {
                 ast.ValDef(ast.Modifiers.FINAL, name, Nil, ast.Empty.NoType, rhs).fromAST(b)
               case expr =>
                 ast.ExtractionValDef(ast.Modifiers.FINAL, expr, Nil, rhs).fromAST(expr)
-            }, inner)).setPos(extractPosition(a.pos))
+            }, inner))
+          }
 
           case _ :: xs => extractFors(xs, body, generator)
         }
 
-        val extracted: ast.Expr = tree match {
+        withPos(tree)(pos => tree match {
           case Block(stats, expr) =>
             ast.Block(stats.flatMap(extractStmts) ++ extractStmts(expr).flatMap {
               case ast.Block(stmts) => stmts
@@ -764,11 +853,12 @@ object QueryParser extends Parser {
             })
 
           case Try(block, catches, finalizer) =>
-            ast.Try(wrapStatements(extractStmts(block), pos), catches.map { case c @ CaseDef(pat, guard, body) =>
-              val guarded = ast.Guarded(extractExpr(pat), extractExpr(guard)).setPos(extractPosition(c.pos))
-              val block = wrapStatements(extractStmts(body), extractPosition(c.pos))
-              guarded -> block
-            }, wrapStatements(extractStmts(finalizer), pos))
+            ast.Try(wrapStatements(block, extractStmts(block)), catches.map { case c @ CaseDef(pat, guard, body) =>
+              val guarded = withPos(c)(_ => ast.Guarded(extractExpr(pat), extractExpr(guard)))
+              val valDef = ast.ExtractionValDef(ast.Modifiers.NoModifiers, guarded, Nil, ast.Empty.NoExpr).setPos(guarded.pos)
+              val block = wrapStatements(c, extractStmts(body))
+              valDef -> block
+            }, wrapStatements(finalizer, extractStmts(finalizer)))
 
           case Function(vparams, body) =>
             ast.FunctionLiteral(vparams.map(p => extractDef(p).asInstanceOf[ast.ValDef]), ast.Empty[ast.Type], extractExpr(body))
@@ -781,8 +871,8 @@ object QueryParser extends Parser {
 
           case Match(selector, cases) =>
             ast.Switch(extractExpr(selector), cases.map { case c @ CaseDef(pat, guard, body) =>
-              val guarded = ast.Guarded(extractExpr(pat), extractExpr(guard)).setPos(extractPosition(c.pos))
-              val block = wrapStatements(extractStmts(body), extractPosition(c.pos))
+              val guarded = withPos(c)(_ => ast.Guarded(extractExpr(pat), extractExpr(guard)))
+              val block = wrapStatements(c, extractStmts(body))
               guarded -> block
             })
 
@@ -790,12 +880,12 @@ object QueryParser extends Parser {
 
           case build.SyntacticForYield(enums, body) => extractFors(enums, extractExpr(body), true)
 
-          case Apply(fun, args) => extractApply(extractExpr(fun), args.map(extractExpr))
+          case Apply(fun, args) => extractApply(tree, extractExpr(fun), args.map(extractExpr))
 
           case TypeApply(fun, args) =>
             val tpArgs = args.map(extractType)
             extractExpr(fun) match {
-              case a : ast.FieldAccess => a.copy(tparams = a.tparams ++ tpArgs)
+              case a : ast.FieldAccess => a.copy(tparams = a.tparams ++ tpArgs).fromAST(a)
               case n : ast.ConstructorCall => n.copy(tpe = n.tpe.copy(tparams = n.tpe.tparams ++ tpArgs).fromAST(n.tpe)).fromAST(n)
               case caller => ast.FunctionCall(caller, tpArgs, Nil)
             }
@@ -848,13 +938,17 @@ object QueryParser extends Parser {
             extractExpr(arg).appendComment(annot.toString)
 
           case Typed(expr, tpt) =>
-            val bound @ ast.Bind(name, _) = extractExpr(expr) match {
-              case b: ast.Bind => b
+            val (pat, guard) = extractExpr(expr) match {
+              case b @ ast.Bind(name, _) => b -> ast.Ident(name).setPos(b.pos)
+              case id: ast.Ident => id -> id
+              case w @ ast.Wildcard => w -> w
               case expr =>
-                val bound = ast.Bind(Names.DEFAULT, expr)
-                if (expr.pos != ast.NoPosition) bound.setPos(expr.pos) else bound.setPos(pos)
+                val bound = ast.Bind("typed", expr)
+                val p = if (expr.pos != ast.NoPosition) expr.pos else pos
+                bound.setPos(p) -> ast.Ident("typed").setPos(p)
             }
-            ast.Guarded(bound, ast.InstanceOf(ast.Ident(name).setPos(bound.pos), extractType(tpt)).setPos(bound.pos))
+            val p = if (guard.pos != ast.NoPosition) guard.pos else pos
+            ast.Guarded(pat, ast.InstanceOf(guard, extractType(tpt)).setPos(p))
 
           case Star(elem) => ast.UnaryOp(extractExpr(elem), "*", true)
 
@@ -867,9 +961,7 @@ object QueryParser extends Parser {
           case EmptyTree => ast.Empty.NoExpr
 
           case o => throw ParsingFailedError(new RuntimeException(s"Unknown expression tree [${o.getClass}]: $o"))
-        }
-
-        extracted.setPos(pos)
+        })
       }
 
       Normalizer(tree match {
@@ -877,7 +969,7 @@ object QueryParser extends Parser {
         case _ => extractStmts(tree) match {
           case List(x) => x
           case Nil => ast.Empty[ast.Statement]
-          case list => ast.Block(list).setPos(extractPosition(tree.pos))
+          case list => ast.Block(list).setPos(p2p(tree.pos))
         }
       })
     }
