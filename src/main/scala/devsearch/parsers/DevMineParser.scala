@@ -6,6 +6,7 @@ import scala.reflect._
 
 import devsearch.ast._
 import Modifiers._
+import java.nio.file._
 
 object GoParser extends DevMineParser("parser-go") {
   def language = Languages.Go
@@ -19,29 +20,27 @@ object GoParser extends DevMineParser("parser-go") {
 abstract class DevMineParser(parserPath: String) extends Parser {
 
   private val parser = {
-    val stream = getClass.getResourceAsStream("/parsers/" + parserPath)
-    val fileName = System.getProperty("java.io.tmpdir") + "/devsearch-parsers" + (new java.util.Random).nextInt + "/" + parserPath
-    val file = new java.io.File(fileName)
+    val parsers = getClass.getResource("/parsers").toURI
 
-    var output : java.io.FileOutputStream = null
+    val system = System.getProperty("os.name").toLowerCase match {
+      case s if s.contains("darwin") || s.contains("mac") => "darwin"
+      case s if s.contains("linux") => "linux"
+      case s => throw ParsingFailedError(new Exception(s"Unknown system : $s"))
+    }
+
+    val binary = java.nio.file.Paths.get(parsers).resolve(system).resolve(parserPath)
+
     try {
-      file.getParentFile.mkdirs()
-      output = new java.io.FileOutputStream(file)
+      val temp = java.nio.file.Files.createTempDirectory("parsers").resolve(parserPath)
 
-      val buffer = new Array[Byte](4096)
-      var readBytes = if (stream != null) stream.read(buffer) else 0
-      while (readBytes > 0) {
-        output.write(buffer, 0, readBytes)
-        readBytes = stream.read(buffer)
-      }
+      java.nio.file.Files.copy(binary, temp)
 
-      file.setExecutable(true)
-      fileName
+      /* Set executable */
+      java.nio.file.Files.setPosixFilePermissions(temp, attribute.PosixFilePermissions.fromString("rwx------"))
+
+      temp.toAbsolutePath.toString
     } catch {
       case io: java.io.IOException => throw ParsingFailedError(io)
-    } finally {
-      if (output != null) output.close()
-      if (stream != null) stream.close()
     }
   }
 
@@ -112,7 +111,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
     case _ => Names.DEFAULT
   }
 
-  private def extractDoc(js: JsObject): String = 
+  private def extractDoc(js: JsObject): String =
     js.fields.get("doc").asArray.as((s: JsString) => s).mkString("\n")
 
   private def extractMulti(elems: List[Expr], pos: Position): Expr = {
@@ -123,13 +122,13 @@ abstract class DevMineParser(parserPath: String) extends Parser {
   }
 
   /** Litteral expression type names */
-  private val IntLit    = "INT"
-  private val FloatLit  = "FLOAT"
-  private val ImagLit   = "IMAG"
-  private val CharLit   = "CHAR"
+  private val IntLit = "INT"
+  private val FloatLit = "FLOAT"
+  private val ImagLit = "IMAG"
+  private val CharLit = "CHAR"
   private val StringLit = "STRING"
-  private val BoolLit   = "BOOl"
-  private val NullLit   = "NIL"
+  private val BoolLit = "BOOl"
+  private val NullLit = "NIL"
 
   private def extractType(js: JsValue, pos: Position): Type = js match {
     case JsObject(fields) => fields.get("type").map(extractType(_, pos)) getOrElse Empty[Type]
@@ -154,7 +153,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
     ValDef(NoModifiers, extractName(o), Nil, extractType(o, pos), Empty[Expr]).setPos(pos).setComment(extractDoc(o))
 
   private def extractPackage(js: JsValue, pos: Position) = js match {
-    case obj @ JsObject(fields) =>
+    case obj@JsObject(fields) =>
 
       val imports = fields.get("imports").asArray.as((s: JsString) => Import(s.value, false, false).setPos(pos))
 
@@ -175,7 +174,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
         val doc = extractDoc(o)
         val name = extractName(o)
         val tpe = o.fields.get("type").map {
-          case obj @ JsObject(fields) if fields.get("expression_type") == Some(StructTypeName) => extractStruct(obj, pos)
+          case obj@JsObject(fields) if fields.get("expression_type") == Some(StructTypeName) => extractStruct(obj, pos)
           case js => extractType(js, pos)
         }
 
@@ -291,7 +290,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
 
         ClassDef(extractVisibility(o), extractName(o), Nil, Nil,
           superClasses ++ superInterfaces ++ superTraits, fields ++ constructors ++ destructors ++ methods ++ nestedClasses)
-            .setPos(pos).setComment(extractDoc(o))
+          .setPos(pos).setComment(extractDoc(o))
       }
 
       val classes = fields.get("classes").asArray.as((o: JsObject) => extractClass(o, pos))
@@ -313,32 +312,32 @@ abstract class DevMineParser(parserPath: String) extends Parser {
     case _ => Empty[AST]
   }
 
-  private val UnaryExprName           = "UNARY"
-  private val BinaryExprName          = "BINARY"
-  private val TernaryExprName         = "TERNARY"
-  private val IncDecExprName          = "INC_DEC"
-  private val CallExprName            = "CALL"
+  private val UnaryExprName = "UNARY"
+  private val BinaryExprName = "BINARY"
+  private val TernaryExprName = "TERNARY"
+  private val IncDecExprName = "INC_DEC"
+  private val CallExprName = "CALL"
   private val ConstructorCallExprName = "CONSTRUCTOR_CALL"
-  private val ArrayExprName           = "ARRAY"
-  private val IndexExprName           = "INDEX"
-  private val BasicLitName            = "BASIC_LIT"
-  private val FuncLitName             = "FUNC_LIT"
-  private val ClassLitName            = "CLASS_LIT"
-  private val ArrayLitName            = "ARRAY_LIT"
-  private val StructTypeName          = "STRUCT_TYPE"
-  private val AttrRefName             = "ATTR_REF"
-  private val ValueSpecName           = "VALUE_SPEC"
-  private val IdentName               = "IDENT"
+  private val ArrayExprName = "ARRAY"
+  private val IndexExprName = "INDEX"
+  private val BasicLitName = "BASIC_LIT"
+  private val FuncLitName = "FUNC_LIT"
+  private val ClassLitName = "CLASS_LIT"
+  private val ArrayLitName = "ARRAY_LIT"
+  private val StructTypeName = "STRUCT_TYPE"
+  private val AttrRefName = "ATTR_REF"
+  private val ValueSpecName = "VALUE_SPEC"
+  private val IdentName = "IDENT"
 
   private def extractExpr(js: JsValue, pos: Position): Expr = js match {
-    case obj @ JsObject(fields) =>
+    case obj@JsObject(fields) =>
       val nextPos = fields.get("line").flatMap {
         case JsNumber(line) => Some(SimpleLinePosition(pos.source, line.toInt))
         case _ => None
       } getOrElse pos
 
       def extractFunction(js: JsValue, pos: Position): (Expr, String) = js match {
-        case obj @ JsObject(fields) =>
+        case obj@JsObject(fields) =>
           val name = fields.get("function_name").as((s: JsString) => s.value).headOption getOrElse Names.DEFAULT
           extractNamespace(obj, pos) -> name
         case JsString(name) => Empty[Expr] -> name
@@ -389,13 +388,13 @@ abstract class DevMineParser(parserPath: String) extends Parser {
 
         case Some(BasicLitName) => obj.getFields("kind", "value") match {
           case Seq(kind, JsString(value)) => extractType(kind, nextPos) match {
-            case tpe : PrimitiveType if tpe == PrimitiveTypes.String => SimpleLiteral(tpe, {
+            case tpe: PrimitiveType if tpe == PrimitiveTypes.String => SimpleLiteral(tpe, {
               val lastIdx = value.length - 1
               if (value.charAt(0) == '"' && value.charAt(lastIdx) == '"') value.substring(1, lastIdx)
               else value
             })
-            case tpe : PrimitiveType => SimpleLiteral(tpe, value).setPos(nextPos)
-            case th @ TypeHint(str) => SimpleLiteral(PrimitiveTypes.Special(str).setPos(nextPos), value).fromAST(th)
+            case tpe: PrimitiveType => SimpleLiteral(tpe, value).setPos(nextPos)
+            case th@TypeHint(str) => SimpleLiteral(PrimitiveTypes.Special(str).setPos(nextPos), value).fromAST(th)
             case _ => Empty[Expr]
           }
           case _ => Empty[Expr]
@@ -422,7 +421,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
         case Some(ArrayLitName) =>
           val elements = fields.get("elements").asArray.map(extractExpr(_, nextPos))
           val dimensions = fields.get("type").asList((o: JsObject) => o.fields.get("dimensions")).asArray
-                                             .as((n: JsNumber) => SimpleLiteral(PrimitiveTypes.Int, n.value.toString).setPos(nextPos))
+            .as((n: JsNumber) => SimpleLiteral(PrimitiveTypes.Int, n.value.toString).setPos(nextPos))
           val tpe = fields.get("type").asList((o: JsObject) => o.fields.get("element_type").toList).map(extractType(_, nextPos)).headOption getOrElse Empty[Type]
           ArrayLiteral(tpe, Nil, dimensions, elements)
 
@@ -434,7 +433,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
           }
 
         case Some(IdentName) => extractName(obj) match {
-          case b @ ("true" | "false") => SimpleLiteral(PrimitiveTypes.Boolean, b)
+          case b@("true" | "false") => SimpleLiteral(PrimitiveTypes.Boolean, b)
           case name => Ident(name)
         }
 
@@ -451,20 +450,20 @@ abstract class DevMineParser(parserPath: String) extends Parser {
     case _ => Empty[Expr]
   }
 
-  private val IfStmtName        = "IF"
-  private val SwitchStmtName    = "SWITCH"
-  private val LoopStmtName      = "LOOP"
+  private val IfStmtName = "IF"
+  private val SwitchStmtName = "SWITCH"
+  private val LoopStmtName = "LOOP"
   private val RangeLoopStmtName = "RANGE_LOOP"
-  private val AssignStmtName    = "ASSIGN"
-  private val DeclStmtName      = "DECL"
-  private val ReturnStmtName    = "RETURN"
-  private val ExprStmtName      = "EXPR"
-  private val TryStmtName       = "TRY"
-  private val ThrowStmtName     = "THROW"
-  private val OtherStmtName     = "OTHER"
+  private val AssignStmtName = "ASSIGN"
+  private val DeclStmtName = "DECL"
+  private val ReturnStmtName = "RETURN"
+  private val ExprStmtName = "EXPR"
+  private val TryStmtName = "TRY"
+  private val ThrowStmtName = "THROW"
+  private val OtherStmtName = "OTHER"
 
   private def extractStmts(js: JsValue, pos: Position): List[Statement] = js match {
-    case obj @ JsObject(fields) =>
+    case obj@JsObject(fields) =>
 
       // /!\ RELATIVE TO FUNCTION POSITION!!
       val nextPos = fields.get("line").flatMap {
@@ -493,7 +492,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
             case _ => None
           }
           init :+ Switch(cond, cases ++ defaultCase)
-          
+
         case Some(LoopStmtName) =>
           val init = fields.get("initialization").asArray.flatMap(extractStmts(_, nextPos))
           val cond = fields.get("condition").map(extractExpr(_, nextPos)) getOrElse Empty[Expr]
@@ -502,12 +501,12 @@ abstract class DevMineParser(parserPath: String) extends Parser {
           val elze = fields.get("else").asArray.flatMap(extractStmts(_, nextPos))
           val isPostEval = fields.get("is_post_evaluated").as((b: JsBoolean) => b.value).headOption getOrElse false
 
-          val valDefs = init.collect { case vd : ValDef => vd }
-          val initExprs = init.collect { case expr : Expr => expr }
+          val valDefs = init.collect { case vd: ValDef => vd }
+          val initExprs = init.collect { case expr: Expr => expr }
           val remainder = init diff valDefs diff initExprs
 
           remainder :+ {
-            val loop = For(valDefs, initExprs, cond, post.collect { case expr : Expr => expr }, Block(body).setPos(nextPos)).setPos(nextPos)
+            val loop = For(valDefs, initExprs, cond, post.collect { case expr: Expr => expr }, Block(body).setPos(nextPos)).setPos(nextPos)
             if (elze.nonEmpty && elze != List(Empty[Statement])) {
               If(cond, loop, Block(elze).setPos(nextPos))
             } else {
@@ -517,7 +516,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
 
         case Some(RangeLoopStmtName) =>
           val vars = fields.get("variables").asArray.flatMap(js => extractExpr(js, nextPos) match {
-            case id @ Ident(name) => List(ValDef(NoModifiers, name, Nil, Empty[Type], Empty[Expr]).fromAST(id))
+            case id@Ident(name) => List(ValDef(NoModifiers, name, Nil, Empty[Type], Empty[Expr]).fromAST(id))
             case _ => Nil
           })
           val iterable = fields.get("iterable").map(extractExpr(_, nextPos)) getOrElse Empty[Expr]
@@ -564,7 +563,7 @@ abstract class DevMineParser(parserPath: String) extends Parser {
           case Seq(o) => List(extractExpr(o, nextPos))
           case _ => Nil
         }
-          
+
         case Some(OtherStmtName) =>
           fields.get("body").asArray.flatMap(extractStmts(_, nextPos))
 
