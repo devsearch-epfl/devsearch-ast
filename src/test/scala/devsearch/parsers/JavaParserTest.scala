@@ -121,4 +121,25 @@ class JavaParserTest extends FlatSpec with ParserTest {
           Block(List(Return(BinaryOp(Ident("i"),"+",SimpleLiteral(PrimitiveTypes.Int,"2"))))))
       ),ClassSort))))
   }
+
+  it should "produce correct line numbers" in {
+    val source = new ContentsSource("Something.java", """
+      public class Toto {
+        public void doSomething(int i) {
+          int a = 1;
+          // comment
+
+
+          // comment 2
+          int b = 2;
+        }
+      }
+    """)
+
+    assert(JavaParser.parse(source).collect {
+      case vd: ValDef if vd.name == "a" => Set("a" -> vd.pos.line)
+      case vd: ValDef if vd.name == "b" => Set("b" -> vd.pos.line)
+      case _ => Set.empty[(String, Int)]
+    } == Set("a" -> 3, "b" -> 8))
+  }
 }

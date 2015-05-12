@@ -1103,4 +1103,21 @@ class ScalaParserTest extends FunSuite with ParserTest {
       "b" -> SimpleLiteral(PrimitiveTypes.Int,"2")
     ))),NoType,SimpleLiteral(PrimitiveTypes.Int,"1"),false))
   }
+
+  test("parser should have correct line numbers") {
+    val source = new ContentsSource("NoFile", """
+      // this is
+      // a comment
+      val a = 2
+
+      // and here is another
+      val b = 1
+    """)
+
+    assert(ScalaParser.parse(source).collect {
+      case vd: ValDef if vd.name == "a" => Set("a" -> vd.pos.line)
+      case vd: ValDef if vd.name == "b" => Set("b" -> vd.pos.line)
+      case _ => Set.empty[(String, Int)]
+    } == Set("a" -> 3, "b" -> 6))
+  }
 }

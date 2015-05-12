@@ -57,7 +57,7 @@ object JsParser extends Parser {
     }
 
     def convertPosition(pos: scala.util.parsing.input.Position): devsearch.ast.Position =
-      new SimplePosition(source, pos.line, pos.column)
+      new SimplePosition(source, pos.line - 1, pos.column - 1)
 
     def withPos[T <% devsearch.ast.Positional with Commentable](_p: => PackratParser[T]): PackratParser[T] = new PackratParser[T] {
       lazy val p = _p
