@@ -35,3 +35,5 @@ libraryDependencies ++= Seq(
 testOptions in Test += Tests.Argument("-oF")
 
 parallelExecution in Test := false
+
+target in Compile in doc := baseDirectory.value / "api"
