@@ -20,27 +20,35 @@ object GoParser extends DevMineParser("parser-go") {
 abstract class DevMineParser(parserPath: String) extends Parser {
 
   private val parser = {
-    val parsers = getClass.getResource("/parsers").toURI
-
     val system = System.getProperty("os.name").toLowerCase match {
       case s if s.contains("darwin") || s.contains("mac") => "darwin"
       case s if s.contains("linux") => "linux"
       case s => throw ParsingFailedError(new Exception(s"Unknown system : $s"))
     }
 
-    val binary = java.nio.file.Paths.get(parsers).resolve(system).resolve(parserPath)
+    val stream = getClass.getResourceAsStream("/parsers/" + system + "/" + parserPath)
+    val fileName = System.getProperty("java.io.tmpdir") + "/devsearch-parsers" + (new java.util.Random).nextInt + "/" + parserPath
+    val file = new java.io.File(fileName)
 
+    var output : java.io.FileOutputStream = null
     try {
-      val temp = java.nio.file.Files.createTempDirectory("parsers").resolve(parserPath)
+      file.getParentFile.mkdirs()
+      output = new java.io.FileOutputStream(file)
 
-      java.nio.file.Files.copy(binary, temp)
+      val buffer = new Array[Byte](4096)
+      var readBytes = if (stream != null) stream.read(buffer) else 0
+      while (readBytes > 0) {
+        output.write(buffer, 0, readBytes)
+        readBytes = stream.read(buffer)
+      }
 
-      /* Set executable */
-      java.nio.file.Files.setPosixFilePermissions(temp, attribute.PosixFilePermissions.fromString("rwx------"))
-
-      temp.toAbsolutePath.toString
+      file.setExecutable(true)
+      fileName
     } catch {
       case io: java.io.IOException => throw ParsingFailedError(io)
+    } finally {
+      if (output != null) output.close()
+      if (stream != null) stream.close()
     }
   }
 
