@@ -4,10 +4,12 @@ import devsearch.ast._
 
 case class FieldFeature(position: CodePiecePosition, name: String) extends Feature(position) {
   def key: String = "fieldName=" + name
+  override def toNiceString: String = "Field Name '" + name + "'"
 }
 
 case class FunctionFieldFeature(position: CodePiecePosition, name: String, args: Int) extends Feature(position) {
   def key: String = "functionFieldName=" + name + " args=" + args
+  override def toNiceString: String = "Function Field Name '" + name + "'"
 }
 
 object FieldExtractor extends FeatureExtractor {

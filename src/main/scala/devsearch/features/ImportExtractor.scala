@@ -4,6 +4,7 @@ import devsearch.ast._
 
 case class ImportFeature(position: CodePiecePosition, domain: String) extends Feature(position) {
   def key: String = "import=" + domain
+  override def toNiceString: String = "Import '"+ domain +"'"
 }
 
 object ImportExtractor extends FeatureExtractor {

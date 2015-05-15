@@ -5,10 +5,12 @@ import devsearch.ast._
 
 case class TypedVarFeature(position: CodePiecePosition, variableType: String, variableName: String) extends Feature(position) {
   def key: String = "variableDeclaration=" + variableName + " type=" + variableType
+  override def toNiceString: String = "Variable Declaration '"+ variableName +"', Type '"+ variableType +"'"
 }
 
 case class VarFeature(position: CodePiecePosition, name: String) extends Feature(position) {
   def key: String = "variableName=" + name
+  override def toNiceString: String = "Variable '"+ name +"'"
 }
 
 object ValDefExtractor extends FeatureExtractor {

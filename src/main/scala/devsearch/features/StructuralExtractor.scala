@@ -4,6 +4,7 @@ import devsearch.ast._
 
 case class ControlFeature(position: CodePiecePosition, ctrl: String) extends Feature(position) {
   def key = "controlStatement=" + ctrl
+  override def toNiceString: String = "Control Statement '"+ ctrl +"'"
 }
 
 object StructuralExtractor extends FeatureExtractor {
