@@ -268,17 +268,25 @@ trait ControlFlowGraphs { self =>
       }
 
       def loops(): Set[List[Node]] = {
-        def rec(chain: List[Node]): Set[List[Node]] = {
+        val MAX_LOOP_COUNT = 5
+        def rec(chain: List[Node], count: Int): Set[List[Node]] = {
           val first = chain.head
           val last = chain.last
 
-          if (!transitiveEdge(last, first)) Set.empty[List[Node]]
-          else if (first == last && chain.size > 1) Set(chain.init)
-          else if (chain.init.contains(last)) Set.empty[List[Node]]
-          else next(last).flatMap(e => rec(chain :+ e.to))
+          if (!transitiveEdge(last, first)) {
+            Set.empty[List[Node]]
+          } else if (first == last && chain.size > 1) {
+            Set(chain.init)
+          } else if (chain.init.contains(last)) {
+            Set.empty[List[Node]]
+          } else if (count >= MAX_LOOP_COUNT) {
+            Set.empty[List[Node]]
+          } else {
+            next(last).flatMap(e => rec(chain :+ e.to, count + 1))
+          }
         }
 
-        val allChains = nodes.flatMap(n => rec(n :: Nil))
+        val allChains = nodes.flatMap(n => rec(n :: Nil, 0))
 
         def filterChains(seen: Set[Node], chains: List[List[Node]], found: List[List[Node]]): Set[List[Node]] = chains match {
           case x :: xs =>
