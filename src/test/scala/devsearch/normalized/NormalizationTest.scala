@@ -29,4 +29,8 @@ class NormalizationTest extends FlatSpec with CodeProvider {
   it should "work on SlickQueryContext.scala" in {
     Normalizer(sampleCode("SlickQueryContext.scala").ast)
   }
+
+  it should "work on TimeBasedRecommendor.js" in {
+    Normalizer(sampleCode("TimeBasedRecommendor.js").ast)
+  }
 }
