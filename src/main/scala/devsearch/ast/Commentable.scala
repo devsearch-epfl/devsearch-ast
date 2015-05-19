@@ -3,9 +3,9 @@ package devsearch.ast
 /**
  * Commentable
  *
- * Trait that enables comment attribution to a given tree.
+ * Trait that enables comment attribution to a given tree (or other structure).
  * Comments are stored as options to model the likely case of no comment for a given node,
- * and we provide [[setComment]], [[appendComment]] and [[prependComment]] utilities to modify
+ * and we provide `setComment`, `appendComment` and `prependComment` utilities to modify
  * the internally stored comment option.
  */
 trait Commentable {
@@ -17,6 +17,7 @@ trait Commentable {
     this
   }
 
+  /** Extends the current comment by adding `comment` at the end, or setting it if no comment is defined */
   def appendComment(comment: String): this.type = {
     setComment(_comment match {
       case Some(c) => c +"\n\n" + comment
@@ -29,6 +30,7 @@ trait Commentable {
     this
   }
 
+  /** Extends the current comment by adding `comment` at the beginning, or setting it if no comment is defined */
   def prependComment(comment: String): this.type = {
     setComment(_comment match {
       case Some(c) => comment +"\n\n" + c

@@ -73,6 +73,11 @@ trait FeatureExtractor extends java.io.Serializable {
  * job of the caller to parallelize over multiple code files.
  */
 object FeatureRecognizer extends (CodeFile => TraversableOnce[Feature]) with java.io.Serializable {
+
+  /**
+   * Set of all [[FeatureExtractor]] objects provided by the project. Used to apply all extractors
+   * in a centralized manner onto a source code file.
+   */
   lazy val extractors = Set(
     ClassDefExtractor,
     ImportExtractor,

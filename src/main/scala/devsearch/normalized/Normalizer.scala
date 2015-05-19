@@ -1,5 +1,16 @@
 package devsearch.normalized
 
+/**
+ * Transforms an AST into SSA normal form.
+ *
+ * Uses components in
+ * - [[ScopingRenamer]]
+ * - [[AstExtraction]]
+ * - [[SingleAssignment]]
+ * - [[ControlFlowGraphs]]
+ * to extract the control-flow graph and transform the AST
+ * into normal form.
+ */
 object Normalizer
   extends AstExtraction
      with ScopingRenamer
