@@ -2,62 +2,54 @@ package devsearch.normalized
 
 import devsearch.ast
 
-/**
- * Edge in the [[ControlFlowGraph]] that extends the base [[Edge]] definition
- * with a guard and bounds the `Node` type to a control-flow [[Node]].
- *
- * The edge guard consists in an option (guard is not required) of a `(Value, Boolean)`
- * pair where the `Value` element encodes the guard and the boolean specifies whether
- * the guard is positive or negated (for else branches).
- */
+/** Edge in the [[ControlFlowGraph]] that extends the base [[Edge]] definition
+  * with a guard and bounds the `Node` type to a control-flow [[Node]].
+  *
+  * The edge guard consists in an option (guard is not required) of a `(Value, Boolean)`
+  * pair where the `Value` element encodes the guard and the boolean specifies whether
+  * the guard is positive or negated (for else branches).
+  */
 trait GuardedEdge extends Edge {
   type Node <: devsearch.normalized.Node
   def guard: Option[(Value, Boolean)]
 }
 
-/**
- * Node in the [[ControlFlowGraph]].
- *
- * Provides a list of SSA [[Statement]] elements that encode block behavior and
- * defines a `locked: Boolean` member to determine whether the Node can be connected
- * to others in the graph or not (typically nodes get locked once it ends with a
- * [[Throw]] statement).
- */
+/** Node in the [[ControlFlowGraph]].
+  *
+  * Provides a list of SSA [[Statement]] elements that encode block behavior and
+  * defines a `locked: Boolean` member to determine whether the Node can be connected
+  * to others in the graph or not (typically nodes get locked once it ends with a
+  * [[Throw]] statement).
+  */
 trait Node {
   def statements: List[Statement]
   def locked: Boolean
 }
 
-/**
- * [[Graph]] extension that provides control-flow and SSA helpers.
- *
- * The control-flow graph guarantees we have a control-flow [[Node]]
- * as graph node and provides four kinds of functionalities:
- *
- * 1. Efficient graph properties, namely connectedness and transitive
- * connectedness in methods `next`, `prev`, `transitiveNext`, `transitivePrev`
- * and `transitiveEdge`.
- *
- * 2. Dominator-tree computation. The dominator tree and dominance frontier
- * are computed using the Lengauer-Tarjan algorithm and can be accessed through
- * the [[dominator]], [[dominated]], [[transitiveDominated]] and [[frontier]]
- * methods.
- *
- * 3. Let-def sequence computation and access through the methods
- * [[definingStatement]] and [[definingNode]] for identifiers. Furthermore, we
- * also provide a [[dependencies]] method that tracks the dependency tree
- * between local variables.
- *
- * 4. Loop extraction that computes control-flow loops that can later be used
- * to discover properties about control-flow.
- */
+/** [[Graph]] extension that provides control-flow and SSA helpers.
+  *
+  * The control-flow graph guarantees we have a control-flow [[Node]]
+  * as graph node and provides four kinds of functionalities:
+  *  1. Efficient graph properties, namely connectedness and transitive
+  *     connectedness in methods `next`, `prev`, `transitiveNext`, `transitivePrev`
+  *     and `transitiveEdge`.
+  *  2. Dominator-tree computation. The dominator tree and dominance frontier
+  *     are computed using the Lengauer-Tarjan algorithm and can be accessed through
+  *     the [[dominator]], [[dominated]], [[transitiveDominated]] and [[frontier]]
+  *     methods.
+  *  3. Let-def sequence computation and access through the methods
+  *     [[definingStatement]] and [[definingNode]] for identifiers. Furthermore, we
+  *     also provide a [[dependencies]] method that tracks the dependency tree
+  *     between local variables.
+  *  4. Loop extraction that computes control-flow loops that can later be used
+  *     to discover properties about control-flow.
+  */
 trait ControlFlowGraph { self: Graph =>
   type Node <: devsearch.normalized.Node
 
-  /**
-   * Direct dominator of a node. Returns an option to deal with nodes that have
-   * no dominator, namely the graph entry-point.
-   */
+  /** Direct dominator of a node. Returns an option to deal with nodes that have
+    * no dominator, namely the graph entry-point.
+    */
   def dominator(node: Node): Option[Node]
 
   /** The set of nodes that are directly dominated by the argument node */
@@ -69,11 +61,10 @@ trait ControlFlowGraph { self: Graph =>
   /** The dominance-frontier of the argument node */
   def frontier(node: Node): Set[Node]
 
-  /**
-   * The assignment statement that defines the given local variable if it exists.
-   *
-   * @see [[Statement]] for more information about assignment
-   */
+  /** The assignment statement that defines the given local variable if it exists.
+    *
+    * @see [[Statement]] for more information about assignment
+    */
   def definingStatement(id: Identifier): Option[Statement]
 
   /** The node in which the [[definingStatement]] of the given local variable resides */

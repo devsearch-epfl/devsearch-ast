@@ -1,13 +1,12 @@
 package devsearch.ast
 
-/**
- * Commentable
- *
- * Trait that enables comment attribution to a given tree (or other structure).
- * Comments are stored as options to model the likely case of no comment for a given node,
- * and we provide `setComment`, `appendComment` and `prependComment` utilities to modify
- * the internally stored comment option.
- */
+/** Commentable
+  *
+  * Trait that enables comment attribution to a given tree (or other structure).
+  * Comments are stored as options to model the likely case of no comment for a given node,
+  * and we provide `setComment`, `appendComment` and `prependComment` utilities to modify
+  * the internally stored comment option.
+  */
 trait Commentable {
   private var _comment: Option[String] = None
   def comment: Option[String] = _comment

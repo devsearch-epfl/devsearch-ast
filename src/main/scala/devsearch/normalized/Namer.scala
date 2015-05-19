@@ -5,12 +5,11 @@ import scala.collection.mutable.{Map => MutableMap}
 /** Thrown by [[Namer]] when it enters an invalid state */
 case class NamingError(msg: String) extends RuntimeException(msg)
 
-/**
- * Namer
- *
- * Provides utilities to generate fresh names and maintains a mapping back
- * to their original definitions.
- */
+/** Namer
+  *
+  * Provides utilities to generate fresh names and maintains a mapping back
+  * to their original definitions.
+  */
 class Namer(splitter: String = "") {
   private val nameCounters = MutableMap.empty[String, Int]
   private val originalNames = MutableMap.empty[String, String]
@@ -29,12 +28,11 @@ class Namer(splitter: String = "") {
     freshName
   }
 
-  /**
-   * Registers a name that cannot be used as a fresh name.
-   *
-   * Note that this method will throw a [[NamingError]] if the name to maintain has
-   * already been used as a fresh name (can't be guaranteed maintained if that's the case).
-   */
+  /** Registers a name that cannot be used as a fresh name.
+    *
+    * Note that this method will throw a [[NamingError]] if the name to maintain has
+    * already been used as a fresh name (can't be guaranteed maintained if that's the case).
+    */
   def maintain(name: String): Unit = nameCounters.get(name) match {
     case Some(i) if i > 0 =>
       throw NamingError("Can't maintain name that has already been freshened: " + name)

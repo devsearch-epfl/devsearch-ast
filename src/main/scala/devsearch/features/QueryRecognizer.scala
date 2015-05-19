@@ -3,18 +3,17 @@ package devsearch.features
 import devsearch.ast.{AST, Empty}
 import devsearch.parsers.Languages
 
-/**
- * Parser for language-agnostic code.
- *
- * In some cases, it can be useful to parse some source code even though the
- * source language is unknown. We perform this by successively applying the available
- * parsers (as defined in [[devsearch.parsers.Languages]]) to the code snippet
- * until a parser is able to recognize the snippet.
- *
- * Since we only take the first parse result, it is important to order the languages
- * in a meaningful manner. See [[devsearch.parsers.Languages.orderedLangList]] for
- * more information.
- */
+/** Parser for language-agnostic code.
+  *
+  * In some cases, it can be useful to parse some source code even though the
+  * source language is unknown. We perform this by successively applying the available
+  * parsers (as defined in [[devsearch.parsers.Languages]]) to the code snippet
+  * until a parser is able to recognize the snippet.
+  *
+  * Since we only take the first parse result, it is important to order the languages
+  * in a meaningful manner. See [[devsearch.parsers.Languages.orderedLangList]] for
+  * more information.
+  */
 object QueryRecognizer {
 
   /** Extract a code snippet of unknown language to a code file if possible. */

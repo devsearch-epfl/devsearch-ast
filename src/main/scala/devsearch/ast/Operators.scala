@@ -15,12 +15,11 @@ object Operators {
     children.foreach(rec)
   }
 
-  /**
-   * Typical foldRight function on tree structures. The function receives the results of being applied on
-   * all the trees children as a second parameter.
-   *
-   * Mostly used to implement other utility functions such as [[exists]] and [[collect]].
-   */
+  /** Typical foldRight function on tree structures. The function receives the results of being applied on
+    * all the trees children as a second parameter.
+    *
+    * Mostly used to implement other utility functions such as [[exists]] and [[collect]].
+    */
   def foldRight[T](f: (AST, Seq[T]) => T)(ast: AST): T = {
     val rec = foldRight(f) _
 
@@ -55,10 +54,9 @@ object Operators {
     rec(ast :: Nil, Set.empty)
   }
 
-  /**
-   * Post-transform of `f` on `ast`. The optional argument `applyRec` can be used to perform
-   * a transformation fixpoint over transformation results (but be careful this could ne non-terminating!)
-   */
+  /** Post-transform of `f` on `ast`. The optional argument `applyRec` can be used to perform
+    * a transformation fixpoint over transformation results (but be careful this could ne non-terminating!)
+    */
   def postMap(f: AST => Option[AST], applyRec: Boolean = false)(ast: AST): AST = {
     val rec = postMap(f, applyRec) _
 
@@ -93,14 +91,13 @@ object Operators {
     v2
   }
 
-  /**
-   * Children extractor
-   *
-   * This function returns the flattened list of the direct children of any AST. It also returns a function that can
-   * rebuild the AST given a transformed list of children. Note that the transformed list MUST preserve types and size!
-   *
-   * This function is used as a building block for transformations and traversal.
-   */
+  /** Children extractor
+    *
+    * This function returns the flattened list of the direct children of any AST. It also returns a function that can
+    * rebuild the AST given a transformed list of children. Note that the transformed list MUST preserve types and size!
+    *
+    * This function is used as a building block for transformations and traversal.
+    */
   def unapply(ast: AST): (List[AST], List[AST] => AST) = {
 
     import shapeless._
@@ -440,12 +437,11 @@ object Operators {
   }
 }
 
-/**
- * Simple traverser class
- *
- * Useful when traversal needs to maintain complex state that cannot easily be
- * encoded into [[Operators.foldRight]].
- */
+/** Simple traverser class
+  *
+  * Useful when traversal needs to maintain complex state that cannot easily be
+  * encoded into [[Operators.foldRight]].
+  */
 class Traverser {
   def apply(ast: AST): Unit = traverse(ast)
 
@@ -455,12 +451,11 @@ class Traverser {
   }
 }
 
-/**
- * Simple transformer class
- *
- * Useful when transformation needs state information that cannot be encoded
- * when using the [[Operators.postMap]] function.
- */
+/** Simple transformer class
+  *
+  * Useful when transformation needs state information that cannot be encoded
+  * when using the [[Operators.postMap]] function.
+  */
 class Transformer {
   def apply(ast: AST): AST = transform(ast)
 

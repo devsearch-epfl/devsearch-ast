@@ -5,28 +5,26 @@ import devsearch.ast._
 /** Exception parsers will throw when parsing fails. */
 case class ParsingFailedError(cause: Throwable) extends Exception("Parsing failed: " + cause.getMessage, cause)
 
-/**
- * Base trait for DevSearch parsers
- *
- * Each parser must specify the language for which is it intended in
- * {{{
- * def language: String
- * }}}
- * Note that this language must be defined in [[Languages.orderedLangList]] with associated
- * meta-data. Furthermore, the meat-and-bones of the parser are defined in
- * {{{
- * def parse(source: Source): AST
- * }}}
- * which will transform a code source into an AST. Note that this function can throw [[ParsingFailedError]]
- * if the parsing fails due to invalid source code.
- */
+/** Base trait for DevSearch parsers
+  *
+  * Each parser must specify the language for which is it intended in
+  * {{{
+  * def language: String
+  * }}}
+  * Note that this language must be defined in [[Languages.orderedLangList]] with associated
+  * meta-data. Furthermore, the meat-and-bones of the parser are defined in
+  * {{{
+  * def parse(source: Source): AST
+  * }}}
+  * which will transform a code source into an AST. Note that this function can throw [[ParsingFailedError]]
+  * if the parsing fails due to invalid source code.
+  */
 trait Parser {
 
-  /**
-   * The language this parser is intended for
-   *
-   * This language must be defined in [[Languages.orderedLangList]]!
-   */
+  /** The language this parser is intended for
+    *
+    * This language must be defined in [[Languages.orderedLangList]]!
+    */
   def language: String
 
   /** Actually parsing the source code into an AST */

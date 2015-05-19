@@ -2,62 +2,65 @@ package devsearch.normalized
 
 import devsearch.ast
 
-/**
- * Named node in the normal form definition tree.
- *
- * The SSA normal form we provide outputs a definition tree such that any
- * code definition (like classes, objects, functions, etc.) is wrapped into
- * a `Definition` and points to the next `Definition` instances that are
- * defined inside itself.
- *
- * For example, the Scala code
- * {{{
- * class A {
- *   def f: Int = ...
- *   def test(i: Int): Boolean = {
- *     def rec(a: Int): Int = ...
- *     ...
- *   }
- * }
- * }}}
- * gives rise to the definition tree:
- * {{{
- *    A
- *   / \
- *  f  test
- *      |
- *     rec
- * }}}
- *
- * Definitions that have associated behavior (i.e. functions) are defined
- * as [[CodeDefinition]] instances.
- */
+/** Named node in the normal form definition tree.
+  *
+  * The SSA normal form we provide outputs a definition tree such that any
+  * code definition (like classes, objects, functions, etc.) is wrapped into
+  * a `Definition` and points to the next `Definition` instances that are
+  * defined inside itself.
+  *
+  * For example, the Scala code
+  * {{{
+  * class A {
+  *   def f: Int = ???
+  *   def test(i: Int): Boolean = {
+  *     def rec(a: Int): Int = ???
+  *     rec(i)
+  *   }
+  * }
+  * }}}
+  * gives rise to the definition tree:
+  * {{{
+  * - A -
+  *  / \
+  * f test
+  *     |
+  *    rec
+  * }}}
+  *
+  * Definitions that have associated behavior (i.e. functions) are defined
+  * as [[CodeDefinition]] instances.
+  */
 sealed trait Definition {
+
+  /** Name of the definition */
   def name: String
+
+  /** Structural sub-definitions in the definition tree */
   def definitions: List[Definition]
 }
 
-/**
- * Definition sub-type that also provides a control-flow graph.
- *
- * Definitions that have associated semantics (typically functions) are encoded as
- * `CodeDefinition` instances and the control-flow graph of the semantics is provided in
- * ```scala
- * val graph: Graph with ControlFlowGraph
- * ```
- */
+/** Definition sub-type that also provides a control-flow graph.
+  *
+  * Definitions that have associated semantics (typically functions) are encoded as
+  * `CodeDefinition` instances and the control-flow graph of the semantics is provided in
+  * {{{
+  * val graph: Graph with ControlFlowGraph
+  * }}}
+  */
 trait CodeDefinition extends Definition {
+
+  /** Control-flow graph of the associated behavior */
   val graph: Graph with ControlFlowGraph
 }
 
-/**
- * Extraction phase from ASTs to [[Definition]]-trees and control-flow graphs.
- *
- * See for more information:
- * - [[Definition]] and [[CodeDefinition]] about the definition tree
- * - [[Graph]] and [[ControlFlowGraph]] about the extracted control-flow graph for code definitions
- * - [[Statement]] and [[Expr]] about the expressions and statements comprising the normal form
- */
+/** Extraction phase from ASTs to [[devsearch.normalized.Definition Definition]]-trees and control-flow graphs.
+  *
+  * See for more information:
+  *  - [[devsearch.normalized.Definition Definition]] and [[devsearch.normalized.CodeDefinition CodeDefinition]] about the definition tree
+  *  - [[Graph]] and [[ControlFlowGraph]] about the extracted control-flow graph for code definitions
+  *  - [[Statement]] and [[Expr]] about the expressions and statements comprising the normal form
+  */
 trait AstExtraction extends ControlFlowGraphs { self =>
 
   def mkNode = new Node

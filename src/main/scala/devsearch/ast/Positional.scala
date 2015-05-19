@@ -1,9 +1,8 @@
 package devsearch.ast
 
-/**
- * Copied over from https://github.com/scala/scala/blob/v2.10.4/src/library/scala/util/parsing/input/Positional.scala
- * We redefine this here to make sure the positions we use are our positions
- */
+/** Copied over from https://github.com/scala/scala/blob/v2.10.4/src/library/scala/util/parsing/input/Positional.scala
+  * We redefine this here to make sure the positions we use are our positions
+  */
 trait Positional {
   private var _pos: Position = NoPosition
   def pos: Position = _pos
@@ -14,11 +13,10 @@ trait Positional {
   }
 }
 
-/**
- * A general position type that gives point-like position in a given source file.
- *
- * @see [[Source]]
- */
+/** A general position type that gives point-like position in a given source file.
+  *
+  * @see [[Source]]
+  */
 trait Position extends java.io.Serializable {
   def source: Source
   def line: Int

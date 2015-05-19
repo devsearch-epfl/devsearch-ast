@@ -2,14 +2,13 @@ package devsearch.parsers
 
 import org.apache.commons.io.FilenameUtils
 
-/**
- * Centralized language handling for parsers.
- *
- * Provides utilities to access mappings between language names, file extensions
- * and parsers. Also provides the full list of supported languages.
- *
- * For guessing the language of a code snippet, see [[orderedLangList]].
- */
+/** Centralized language handling for parsers.
+  *
+  * Provides utilities to access mappings between language names, file extensions
+  * and parsers. Also provides the full list of supported languages.
+  *
+  * For guessing the language of a code snippet, see [[orderedLangList]].
+  */
 object Languages {
   val Go = "Go"
   val Java = "Java"
@@ -19,18 +18,17 @@ object Languages {
 
   case class LangSpec(extension: String, parser: Parser)
 
-  /**
-   * Ordered list of languages and their specifications.
-   *
-   * This contains the comprehensive list of languages supported by the project
-   * along with the associated file extension and parser. All other helper functions
-   * in this object are based on this list.
-   *
-   * The list of languages is ordered and the given order is used when parsing code
-   * snippets for which the language is unknown. Parsing these language-agnostic
-   * snippets is performed using fallback by trying the parsers in order and returning
-   * the first successful parse result. See [[features.QueryRecognizer]] for implementation.
-   */
+  /** Ordered list of languages and their specifications.
+    *
+    * This contains the comprehensive list of languages supported by the project
+    * along with the associated file extension and parser. All other helper functions
+    * in this object are based on this list.
+    *
+    * The list of languages is ordered and the given order is used when parsing code
+    * snippets for which the language is unknown. Parsing these language-agnostic
+    * snippets is performed using fallback by trying the parsers in order and returning
+    * the first successful parse result. See [[features.QueryRecognizer]] for implementation.
+    */
   val orderedLangList = List(
     (Go, LangSpec("go", GoParser)),
     (JavaScript, LangSpec("js", JsParser)),

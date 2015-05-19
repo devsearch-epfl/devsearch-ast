@@ -1,11 +1,10 @@
 package devsearch.normalized
 
-/**
- * Transform a normal form with re-assignment into SSA.
- *
- * Basically takes care of generating fresh names where rassignment takes place and
- * injecting the appropriate phi-functions at the dominance frontier.
- */
+/** Transform a normal form with re-assignment into SSA.
+  *
+  * Basically takes care of generating fresh names where rassignment takes place and
+  * injecting the appropriate phi-functions at the dominance frontier.
+  */
 trait SingleAssignment extends AstExtraction {
 
   def singleAssignment(definition: Definition): (Namer, Definition) = {
