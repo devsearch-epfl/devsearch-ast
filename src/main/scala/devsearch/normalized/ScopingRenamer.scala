@@ -2,6 +2,13 @@ package devsearch.normalized
 
 import devsearch.ast.{Expr => AstExpr, Definition => AstDefinition, _}
 
+/**
+ * Freshen name clashes based on scopes
+ *
+ * It is easier to track scoping information in structural AST form than in
+ * control-flow graph form, so we perform some simple name freshening when
+ * variables are masked by local scopes on the AST.
+ */
 trait ScopingRenamer {
 
   def scopeNames(ast: AST): (Namer, AST) = {

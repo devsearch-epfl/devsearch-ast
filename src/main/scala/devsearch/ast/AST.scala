@@ -1,7 +1,19 @@
 package devsearch.ast
 
-/** A generic Abstract Syntax Tree format */
+/**
+ * A generic Abstract Syntax Tree format
+ *
+ * This AST super-type represents the encoding of diferent language syntaxes into a single
+ * common tree format. The format tries to preserve as much information about the initial
+ * syntax while unifying as many common features as possible. This gives us a
+ * precision-similarity tradeoff.
+ *
+ * We provide tree-traversal and transformation operators in order to simplify pattern
+ * recognition and normalization steps on the ASTs.
+ */
 sealed trait AST extends Positional with Commentable with java.io.Serializable {
+
+  /** Copy meta-information from `ast` to `this`, namely comment and position information */
   def fromAST(ast: AST): this.type = {
     ast.comment.foreach(appendComment)
     setPos(ast.pos)
