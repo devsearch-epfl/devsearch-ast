@@ -24,7 +24,9 @@ trait Edge {
  * To ensure the types make sense before and after transformation, `GraphOps` are
  * type-parametric in `Node`, `Edge` and `Graph`. These types are used in the creation
  * functions:
+ *
  * - [[newEdge]] which transforms an edge with two new Nodes
+ *
  * - [[newGraph]] which builds a same-typed graph from a set of nodes and edges
  */
 trait GraphOps { self =>
@@ -57,13 +59,19 @@ trait GraphOps { self =>
  * Generic directed graph base-type
  *
  * Provides basic graph functionalities such as
+ *
  * - [[nodes]], the set of nodes in this graph
+ *
  * - [[edges]], the set of edges in this graph
+ *
  * - [[firstNode]] and [[lastNode]], the respective first and last nodes of this graph
  * (we require these to exist in our use case)
+ *
  * - [[next]], [[prev]], [[transitiveNext]], [[transitivePrev]] and [[transitiveEdge]]
  * graph connectedness functions
+ *
  * - [[map]] that transforms the nodes in the graph
+ *
  * - some pretty-printing utilities such as [[printStructure]]
  */
 trait Graph { self =>
@@ -134,7 +142,7 @@ trait Graph { self =>
    * Pretty-print the graph edges using indices for node identifiers.
    *
    * The following graph:
-   * ```
+   * {{{
    *      A
    *  r1 / \ r2
    *    B   C
@@ -142,15 +150,15 @@ trait Graph { self =>
    *      D
    *   r5 |
    *      E
-   * ```
+   * }}}
    * would result in:
-   * ```
+   * {{{
    * (1,2,r1)
    * (1,3,r2)
    * (2,4,r3)
    * (3,4,r4)
    * (4,5,r5)
-   * ```
+   * }}}
    * where r1-r5 are the edge labels, see [[devsearch.normalized.Edge!.reason]].
    */
   def printStructure: String = {

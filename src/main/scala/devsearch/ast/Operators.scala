@@ -3,6 +3,7 @@ package devsearch.ast
 import scala.reflect._
 import Empty._
 
+/** Functional operators on [[AST]] instances */
 object Operators {
 
   /** Typical foreach iteration on a tree structure. */

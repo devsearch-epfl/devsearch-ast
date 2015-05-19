@@ -6,13 +6,19 @@ import devsearch.ast
  * SSA statement super-type.
  *
  * Statements in SSA normal form basically consist in assignments:
+ *
  * - [[Assign]], a standard local assignment node
+ *
  * - [[MultiAssign]], a deconstrucing assignment that extracts tuple fields
+ *
  * - [[FieldAssign]], assignment to an object fields
+ *
  * - [[IndexAssign]], assignment to an array index
  *
  * Two more statements are available to encode mutation and are:
+ *
  * - [[Mutator]], a wrapper for an expression that mutates the program
+ *
  * - [[Throw]], an exception-throwing statement that terminates the current
  * control-flow block
  *

@@ -11,7 +11,7 @@ import devsearch.ast
  * defined inside itself.
  *
  * For example, the Scala code
- * ```scala
+ * {{{
  * class A {
  *   def f: Int = ...
  *   def test(i: Int): Boolean = {
@@ -19,15 +19,15 @@ import devsearch.ast
  *     ...
  *   }
  * }
- * ```
+ * }}}
  * gives rise to the definition tree:
- * ```
+ * {{{
  *    A
  *   / \
  *  f  test
  *      |
  *     rec
- * ```
+ * }}}
  *
  * Definitions that have associated behavior (i.e. functions) are defined
  * as [[CodeDefinition]] instances.
