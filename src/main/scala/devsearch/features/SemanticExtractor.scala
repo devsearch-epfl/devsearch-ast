@@ -4,10 +4,12 @@ import devsearch.normalized._
 
 case class MapCallFeature(position: CodePiecePosition) extends Feature(position) {
   def key: String = "map call"
+  override def toNiceString: String = "Map Call"
 }
 
 case class FlatMapCallFeature(position: CodePiecePosition) extends Feature(position) {
   def key: String = "flatMap call"
+  override def toNiceString: String = "FlatMap Call"
 }
 
 object SemanticExtractor extends FeatureExtractor {

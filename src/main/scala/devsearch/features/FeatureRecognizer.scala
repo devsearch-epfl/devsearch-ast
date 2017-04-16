@@ -26,6 +26,9 @@ abstract class Feature(val pos: CodePiecePosition) extends java.io.Serializable 
     encode(key) + "," + encode(pos.location.toString) + "," + pos.line.toString
   }
 
+  /** Generates nice string which can be shown in front-end. */
+  def toNiceString: String
+
   override def equals(that: Any) = that match {
     case f : Feature => key == f.key && pos == f.pos
     case _ => false
@@ -46,6 +49,12 @@ object Feature {
     new Feature(featurePosition) {
       def key = featureKey
       override def toString = "Feature(" + key + "," + featurePosition + ")"
+
+      /**
+       * Nice string is not available here. But this is not a problem since this function is not used by
+       * the front end.
+       */
+      override def toNiceString = "Nice string not available."
     }
   }
 }

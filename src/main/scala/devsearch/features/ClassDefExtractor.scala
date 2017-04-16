@@ -4,10 +4,12 @@ import devsearch.ast._
 
 case class ClassNameFeature(position: CodePiecePosition, name: String) extends Feature(position) {
   def key: String = "className=" + name
+  override def toNiceString: String = "Class Name '" + name + "'"
 }
 
 case class InheritanceFeature(position: CodePiecePosition, className: String, superClassName: String) extends Feature(position) {
   def key: String = "inheritance=" + className + " from=" + superClassName
+  override def toNiceString: String = "'"+ className +"' inherits from '" + superClassName + "'"
 }
 
 object ClassDefExtractor extends FeatureExtractor {

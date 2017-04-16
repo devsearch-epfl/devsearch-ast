@@ -4,26 +4,32 @@ import devsearch.ast._
 
 case class FunNameFeature(position: CodePiecePosition, name: String) extends Feature(position) {
   def key: String = "functionName=" + name
+  override def toNiceString: String = "Function '" + name + "'"
 }
 
 case class ArgNameFeature(position: CodePiecePosition, name: String) extends Feature(position) {
   def key: String = "argumentName=" + name
+  override def toNiceString: String = "Argument '" + name + "'"
 }
 
 case class ParametricFunFeature(position: CodePiecePosition) extends Feature(position) {
   def key: String = "function is parametric"
+  override def toNiceString: String = "Parametric Function"
 }
 
 case class AbstractFunFeature(position: CodePiecePosition) extends Feature(position) {
   def key: String = "abstractFunction"
+  override def toNiceString: String = "Abstract Function"
 }
 
 case class OverridingFunFeature(position: CodePiecePosition) extends Feature(position) {
   def key: String = "overridingFunction"
+  override def toNiceString: String = "Overriding Function"
 }
 
 case class ThrowsFeature(position: CodePiecePosition, exception: String) extends Feature(position) {
   def key: String = "throwsException=" + exception
+  override def toNiceString: String = "Throws '"+ exception + "'"
 }
 
 object FunDefExtractor extends FeatureExtractor {

@@ -4,6 +4,7 @@ import devsearch.ast._
 
 case class TypeRefFeature(position: CodePiecePosition, path: String) extends Feature(position) {
   def key: String = "typeReference=" + path
+  override def toNiceString: String = "Type Reference '"+ path +"'"
 }
 
 object TypeExtractor extends FeatureExtractor {
